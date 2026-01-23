@@ -147,6 +147,7 @@ struct PromptView: View {
             do {
                 let response = try await apiClient.createEntry(request)
                 await MainActor.run {
+                    isLoading = false
                     promptManager.dismissPrompt()
                 }
                 // Show success notification - Requirements: 2.5
