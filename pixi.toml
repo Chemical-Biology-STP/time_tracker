@@ -1,0 +1,19 @@
+[workspace]
+channels = ["conda-forge"]
+name = "time_tracker"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[tasks]
+run = "flask --app run:app run --debug"
+build-server = "pyinstaller --clean --noconfirm time_tracker_server.spec"
+
+[dependencies]
+pandas = ">=3.0.0,<4"
+openpyxl = ">=3.1.5,<4"
+flask = ">=3.0.0,<4"
+flask-sqlalchemy = ">=3.1.0,<4"
+pytest = ">=8.0.0,<9"
+hypothesis = ">=6.0.0,<7"
+pyinstaller = ">=6.0.0,<7"
+waitress = ">=3.0.0,<4"

@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}{{ group.name }} - Entries{% endblock %}
+
+{% block content %}
+<h1>{{ group.name }} - Time Entries</h1>
+<p>Project: {{ group.project_name }} | Manager: {{ group.manager_name }}</p>
+
+<h2>Add New Entry</h2>
+<form method="POST" action="{{ url_for('main.entries', group_id=group.id) }}">
+    <label for="date">Date</label>
+    <input type="date" id="date" name="date" required>
+
+    <label for="task_description">Task Description</label>
+    <textarea id="task_description" name="task_description" rows="3" required></textarea>
+
+    <h3>Time Blocks</h3>
+    <div id="time-blocks-container">
+        <div class="time-block" data-index="0">
+            <div style="display: flex; gap: 20px; align-items: center;">
+                <div>
+                    <label>Start</label>
+                    <input type="time" name="block_start_0" required>
+                </div>
+                <div>
+                    <label>End</label>
+                    <input type="time" name="block_end_0" required>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button type="button" id="add-block-btn" style="margin-top: 10px; background-color: #28a745;">+ Add Time Block</button>
+
+    <button type="submit" style="margin-top: 15px;">Add Entry</button>
+</form>
+
+<h2>All Entries</h2>
+{% if entries %}
+<table>
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Task</th>
+            <th>Time Blocks</th>
+            <th>Total Hours</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for entry in entries %}
+        <tr>
+            <td>{{ entry.date.strftime('%Y-%m-%d') }}</td>
+            <td>{{ entry.task_description }}</td>
+            <td>
+                {% for block in entry.get_sorted_time_blocks() %}
+                    {{ block.start_time.strftime('%H:%M') }} - {{ block.end_time.strftime('%H:%M') }}{% if not loop.last %}<br>{% endif %}
+                {% else %}
+                    -
+                {% endfor %}
+            </td>
+            <td>{{ "%.2f"|format(entry.total_hours) }}</td>
+            <td>
+                <form method="POST" action="{{ url_for('main.delete_entry', entry_id=entry.id) }}" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this time entry? This action cannot be undone.');">
+                    <button type="submit" class="delete-btn" style="background-color: #dc3545; color: white; padding: 5px 10px; border: none; cursor: pointer;">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+    <p>No time entries yet. Add one above!</p>
+</div>
+{% endif %}
+
+<p style="margin-top: 20px;">
+    <a href="{{ url_for('main.groups') }}">← Back to Groups</a> |
+    <a href="{{ url_for('main.summary', group_id=group.id) }}">View Summary →</a>
+</p>
+
+<script>
+(function() {
+    let blockIndex = 1;
+    const container = document.getElementById('time-blocks-container');
+    const addBtn = document.getElementById('add-block-btn');
+
+    addBtn.addEventListener('click', function() {
+        const blockDiv = document.createElement('div');
+        blockDiv.className = 'time-block';
+        blockDiv.dataset.index = blockIndex;
+        blockDiv.innerHTML = `
+            <div style="display: flex; gap: 20px; align-items: center; margin-top: 10px;">
+                <div>
+                    <label>Start</label>
+                    <input type="time" name="block_start_${blockIndex}">
+                </div>
+                <div>
+                    <label>End</label>
+                    <input type="time" name="block_end_${blockIndex}">
+                </div>
+                <button type="button" class="remove-block-btn" style="background-color: #dc3545; padding: 5px 10px;">Remove</button>
+            </div>
+        `;
+        container.appendChild(blockDiv);
+        blockIndex++;
+    });
+
+    container.addEventListener('click', function(e) {
+        if (e.target.classList.contains('remove-block-btn')) {
+            e.target.closest('.time-block').remove();
+        }
+    });
+})();
+</script>
+{% endblock %}

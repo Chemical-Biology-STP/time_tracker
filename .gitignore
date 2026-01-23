@@ -205,3 +205,22 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+
+# macOS
+.DS_Store
+
+# Xcode build artifacts
+release_build/
+TimeTrackerCompanion/TimeTrackerCompanion/TimeTrackerCompanion/BuildOutput/
+*.xcuserstate
+xcuserdata/
+DerivedData/
+
+# PyInstaller spec (keep it, but ignore generated files)
+*.spec
+
+# Time tracker specific
+time_tracker_server.spec
