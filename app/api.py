@@ -52,6 +52,19 @@ def create_group():
     }), 201
 
 
+@api_bp.route('/groups/<int:group_id>', methods=['DELETE'])
+def delete_group(group_id):
+    """Delete a research group and all its entries."""
+    group = db.session.get(ResearchGroup, group_id)
+    if not group:
+        return jsonify({'error': 'Research group not found'}), 404
+    
+    db.session.delete(group)
+    db.session.commit()
+    
+    return jsonify({'message': 'Group deleted successfully'}), 200
+
+
 @api_bp.route('/entries', methods=['POST'])
 def create_entry():
     """Create a new time entry with time block."""

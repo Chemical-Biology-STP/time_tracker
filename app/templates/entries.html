@@ -61,6 +61,7 @@
             </td>
             <td>{{ "%.2f"|format(entry.total_hours) }}</td>
             <td>
+                <a href="{{ url_for('main.edit_entry', entry_id=entry.id) }}" style="margin-right: 10px;">Edit</a>
                 <form method="POST" action="{{ url_for('main.delete_entry', entry_id=entry.id) }}" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this time entry? This action cannot be undone.');">
                     <button type="submit" class="delete-btn" style="background-color: #dc3545; color: white; padding: 5px 10px; border: none; cursor: pointer;">Delete</button>
                 </form>

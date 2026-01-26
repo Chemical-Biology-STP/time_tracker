@@ -87,6 +87,30 @@ struct SettingsView: View {
                             Text(group.name).tag(group.id as Int?)
                         }
                     }
+                    
+                    ForEach(groups) { group in
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(group.name)
+                                    .font(.body)
+                                if !group.project_name.isEmpty {
+                                    Text(group.project_name)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            Spacer()
+                            Button(role: .destructive) {
+                                Task {
+                                    await deleteGroup(group)
+                                }
+                            } label: {
+                                Image(systemName: "trash")
+                                    .foregroundColor(.red)
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
                 }
                 
                 HStack {
@@ -209,6 +233,18 @@ struct SettingsView: View {
             groups = []
         }
         isLoadingGroups = false
+    }
+    
+    private func deleteGroup(_ group: ResearchGroup) async {
+        do {
+            try await apiClient.deleteGroup(groupId: group.id)
+            groups.removeAll { $0.id == group.id }
+            if settingsManager.defaultGroupId == group.id {
+                settingsManager.defaultGroupId = nil
+            }
+        } catch {
+            // Silently fail - could add error handling UI if needed
+        }
     }
     
     private func testConnection() async {

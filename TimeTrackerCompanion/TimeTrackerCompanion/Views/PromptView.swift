@@ -18,6 +18,8 @@ struct PromptView: View {
     @State private var isLoading: Bool = false
     @State private var errorMessage: String?
     @State private var isLoadingGroups: Bool = true
+    @State private var startTime: Date = Date()
+    @State private var endTime: Date = Date()
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -62,6 +64,25 @@ struct PromptView: View {
                 }
             }
             
+            // Time pickers
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Start Time")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    DatePicker("", selection: $startTime, displayedComponents: .hourAndMinute)
+                        .labelsHidden()
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("End Time")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    DatePicker("", selection: $endTime, displayedComponents: .hourAndMinute)
+                        .labelsHidden()
+                }
+            }
+            
             // Error message display
             if let error = errorMessage {
                 Text(error)
@@ -98,6 +119,10 @@ struct PromptView: View {
         .padding()
         .frame(width: 350)
         .onAppear {
+            // Initialize time pickers based on interval
+            endTime = Date()
+            startTime = endTime.addingTimeInterval(-TimeInterval(settingsManager.promptIntervalMinutes * 60))
+            
             Task {
                 await loadGroups()
             }
@@ -131,16 +156,18 @@ struct PromptView: View {
         isLoading = true
         errorMessage = nil
         
-        let timeBlock = promptManager.calculateTimeBlock()
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
+        
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "HH:mm"
         
         let request = TimeEntryRequest(
             research_group_id: groupId,
             task_description: taskDescription.trimmingCharacters(in: .whitespacesAndNewlines),
             date: dateFormatter.string(from: Date()),
-            start_time: timeBlock.start,
-            end_time: timeBlock.end
+            start_time: timeFormatter.string(from: startTime),
+            end_time: timeFormatter.string(from: endTime)
         )
         
         Task {

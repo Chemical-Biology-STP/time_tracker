@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Entry - {{ group.name }}{% endblock %}
+
+{% block content %}
+<h1>Edit Time Entry</h1>
+<p>Group: {{ group.name }}</p>
+
+<form method="POST" action="{{ url_for('main.edit_entry', entry_id=entry.id) }}">
+    <label for="date">Date</label>
+    <input type="date" id="date" name="date" value="{{ entry.date.strftime('%Y-%m-%d') }}" required>
+
+    <label for="task_description">Task Description</label>
+    <textarea id="task_description" name="task_description" rows="3" required>{{ entry.task_description }}</textarea>
+
+    <h3>Time Blocks</h3>
+    <div id="time-blocks-container">
+        {% for block in entry.get_sorted_time_blocks() %}
+        <div class="time-block" data-index="{{ loop.index0 }}">
+            <div style="display: flex; gap: 20px; align-items: center; margin-top: 10px;">
+                <div>
+                    <label>Start</label>
+                    <input type="time" name="block_start_{{ loop.index0 }}" value="{{ block.start_time.strftime('%H:%M') }}" required>
+                </div>
+                <div>
+                    <label>End</label>
+                    <input type="time" name="block_end_{{ loop.index0 }}" value="{{ block.end_time.strftime('%H:%M') }}" required>
+                </div>
+                {% if not loop.first %}
+                <button type="button" class="remove-block-btn" style="background-color: #dc3545; padding: 5px 10px;">Remove</button>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <div class="time-block" data-index="0">
+            <div style="display: flex; gap: 20px; align-items: center;">
+                <div>
+                    <label>Start</label>
+                    <input type="time" name="block_start_0" required>
+                </div>
+                <div>
+                    <label>End</label>
+                    <input type="time" name="block_end_0" required>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <button type="button" id="add-block-btn" style="margin-top: 10px; background-color: #28a745;">+ Add Time Block</button>
+
+    <div style="margin-top: 20px;">
+        <button type="submit">Save Changes</button>
+        <a href="{{ url_for('main.entries', group_id=group.id) }}" style="margin-left: 10px;">Cancel</a>
+    </div>
+</form>
+
+<script>
+(function() {
+    let blockIndex = {{ entry.time_blocks|length if entry.time_blocks else 1 }};
+    const container = document.getElementById('time-blocks-container');
+    const addBtn = document.getElementById('add-block-btn');
+
+    addBtn.addEventListener('click', function() {
+        const blockDiv = document.createElement('div');
+        blockDiv.className = 'time-block';
+        blockDiv.dataset.index = blockIndex;
+        blockDiv.innerHTML = `
+            <div style="display: flex; gap: 20px; align-items: center; margin-top: 10px;">
+                <div>
+                    <label>Start</label>
+                    <input type="time" name="block_start_${blockIndex}">
+                </div>
+                <div>
+                    <label>End</label>
+                    <input type="time" name="block_end_${blockIndex}">
+                </div>
+                <button type="button" class="remove-block-btn" style="background-color: #dc3545; padding: 5px 10px;">Remove</button>
+            </div>
+        `;
+        container.appendChild(blockDiv);
+        blockIndex++;
+    });
+
+    container.addEventListener('click', function(e) {
+        if (e.target.classList.contains('remove-block-btn')) {
+            e.target.closest('.time-block').remove();
+        }
+    });
+})();
+</script>
+{% endblock %}

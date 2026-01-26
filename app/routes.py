@@ -45,6 +45,16 @@ def groups():
     return render_template('groups.html', groups=all_groups)
 
 
+@bp.route('/groups/<int:group_id>/delete', methods=['POST'])
+def delete_group(group_id):
+    """Delete a research group and all its entries."""
+    group = ResearchGroup.query.get_or_404(group_id)
+    db.session.delete(group)
+    db.session.commit()
+    flash('Research group deleted successfully.', 'success')
+    return redirect(url_for('main.groups'))
+
+
 @bp.route('/groups/<int:group_id>/entries', methods=['GET', 'POST'])
 def entries(group_id):
     """List entries for a group and handle entry creation."""
@@ -139,3 +149,65 @@ def delete_entry(entry_id):
     
     flash('Time entry deleted successfully.', 'success')
     return redirect(url_for('main.entries', group_id=group_id))
+
+
+@bp.route('/entries/<int:entry_id>/edit', methods=['GET', 'POST'])
+def edit_entry(entry_id):
+    """Edit a time entry."""
+    entry = TimeEntry.query.get_or_404(entry_id)
+    group = entry.group
+
+    if request.method == 'POST':
+        task_description = request.form.get('task_description', '')
+        date_str = request.form.get('date', '')
+
+        if not validate_task_description(task_description):
+            flash('Task description cannot be empty.', 'error')
+            return redirect(url_for('main.edit_entry', entry_id=entry_id))
+
+        # Parse date
+        try:
+            entry_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            flash('Invalid date format.', 'error')
+            return redirect(url_for('main.edit_entry', entry_id=entry_id))
+
+        # Parse time blocks from form
+        time_blocks = parse_time_blocks_from_form(request.form)
+
+        # Validate at least one complete time block is provided
+        if not time_blocks:
+            flash('At least one complete time block is required.', 'error')
+            return redirect(url_for('main.edit_entry', entry_id=entry_id))
+
+        # Validate each time block (end > start)
+        for start, end in time_blocks:
+            if not validate_time_block(start, end):
+                flash('Time block end time must be after start time.', 'error')
+                return redirect(url_for('main.edit_entry', entry_id=entry_id))
+
+        # Calculate total hours from all blocks
+        total_hours = calculate_total_hours_from_blocks(time_blocks)
+
+        # Update entry
+        entry.task_description = task_description.strip()
+        entry.date = entry_date
+        entry.total_hours = total_hours
+
+        # Delete existing time blocks
+        TimeBlock.query.filter_by(time_entry_id=entry.id).delete()
+
+        # Create new TimeBlock records
+        for start, end in time_blocks:
+            block = TimeBlock(
+                time_entry_id=entry.id,
+                start_time=start,
+                end_time=end
+            )
+            db.session.add(block)
+
+        db.session.commit()
+        flash('Time entry updated successfully.', 'success')
+        return redirect(url_for('main.entries', group_id=group.id))
+
+    return render_template('edit_entry.html', entry=entry, group=group)

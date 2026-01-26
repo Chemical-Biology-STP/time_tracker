@@ -33,7 +33,7 @@ class ResearchGroup(db.Model):
     name = db.Column(db.String(100), nullable=False)
     manager_name = db.Column(db.String(100), nullable=False)
     project_name = db.Column(db.String(100), nullable=False)
-    entries = db.relationship('TimeEntry', backref='group', lazy=True)
+    entries = db.relationship('TimeEntry', backref='group', lazy=True, cascade='all, delete-orphan')
     
     def get_total_hours(self):
         """Calculate total hours across all entries."""

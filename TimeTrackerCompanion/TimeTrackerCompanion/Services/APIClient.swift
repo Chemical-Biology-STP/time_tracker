@@ -199,6 +199,37 @@ class APIClient: ObservableObject {
         }
     }
     
+    /// Delete a research group from the Flask backend
+    /// - Parameter groupId: ID of the group to delete
+    /// - Throws: APIError on failure
+    func deleteGroup(groupId: Int) async throws {
+        let url = baseURL.appendingPathComponent("/api/groups/\(groupId)")
+        
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "DELETE"
+        
+        do {
+            let (_, response) = try await URLSession.shared.data(for: urlRequest)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                recordFailure()
+                throw APIError.requestFailed
+            }
+            
+            if httpResponse.statusCode == 200 {
+                recordSuccess()
+            } else {
+                recordFailure()
+                throw APIError.serverError(httpResponse.statusCode)
+            }
+        } catch let error as APIError {
+            throw error
+        } catch {
+            recordFailure()
+            throw APIError.requestFailed
+        }
+    }
+    
     // MARK: - Connection State Tracking
     
     /// Record a successful API call
