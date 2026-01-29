@@ -28,7 +28,7 @@ struct TimeTrackerCompanionApp: App {
 
 /// App delegate to handle startup behavior and prompt window management
 /// Requirements: 1.5, 2.3, 2.4, 2.5, 3.1, 6.1, 6.4
-class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
+class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDelegate {
     let promptManager = PromptManager()
     let settingsManager = SettingsManager()
     let apiClient = APIClient()
@@ -148,6 +148,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             window.level = .floating
             window.center()
             window.isReleasedWhenClosed = false
+            window.delegate = self
             
             promptWindow = window
         }
@@ -159,6 +160,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     /// Hide the prompt window - Requirements: 2.4
     private func hidePromptWindow() {
         promptWindow?.orderOut(nil)
+    }
+    
+    /// Handle window close button click
+    func windowWillClose(_ notification: Notification) {
+        if let window = notification.object as? NSWindow, window == promptWindow {
+            promptManager.dismissPrompt()
+        }
     }
     
     /// Show the settings window with floating level

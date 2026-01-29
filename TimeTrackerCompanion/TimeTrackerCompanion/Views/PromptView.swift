@@ -119,13 +119,29 @@ struct PromptView: View {
         .padding()
         .frame(width: 350)
         .onAppear {
-            // Initialize time pickers based on interval
-            endTime = Date()
-            startTime = endTime.addingTimeInterval(-TimeInterval(settingsManager.promptIntervalMinutes * 60))
-            
+            resetForm()
             Task {
                 await loadGroups()
             }
+        }
+        .onChange(of: promptManager.showPrompt) { isShowing in
+            if isShowing {
+                resetForm()
+            }
+        }
+    }
+    
+    private func resetForm() {
+        // Reset time pickers to current time
+        endTime = Date()
+        startTime = endTime.addingTimeInterval(-TimeInterval(settingsManager.promptIntervalMinutes * 60))
+        // Clear previous task description
+        taskDescription = ""
+        errorMessage = nil
+        // Restore default group selection
+        if let defaultId = settingsManager.defaultGroupId,
+           groups.contains(where: { $0.id == defaultId }) {
+            selectedGroupId = defaultId
         }
     }
     
