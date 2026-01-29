@@ -34,6 +34,26 @@ class SettingsManager: ObservableObject {
         didSet { UserDefaults.standard.set(serverPort, forKey: "serverPort") }
     }
     
+    @Published var workingHoursEnabled: Bool {
+        didSet { UserDefaults.standard.set(workingHoursEnabled, forKey: "workingHoursEnabled") }
+    }
+    
+    @Published var workStartHour: Int {
+        didSet { UserDefaults.standard.set(workStartHour, forKey: "workStartHour") }
+    }
+    
+    @Published var workStartMinute: Int {
+        didSet { UserDefaults.standard.set(workStartMinute, forKey: "workStartMinute") }
+    }
+    
+    @Published var workEndHour: Int {
+        didSet { UserDefaults.standard.set(workEndHour, forKey: "workEndHour") }
+    }
+    
+    @Published var workEndMinute: Int {
+        didSet { UserDefaults.standard.set(workEndMinute, forKey: "workEndMinute") }
+    }
+    
     init() {
         // Read all values first before assigning to avoid Swift initialization order issues
         let storedInterval = UserDefaults.standard.integer(forKey: "promptInterval")
@@ -43,6 +63,11 @@ class SettingsManager: ObservableObject {
         let storedProjectPath = UserDefaults.standard.string(forKey: "projectPath")
         let storedAutoStartServer = UserDefaults.standard.bool(forKey: "autoStartServer")
         let storedServerPort = UserDefaults.standard.integer(forKey: "serverPort")
+        let storedWorkingHoursEnabled = UserDefaults.standard.bool(forKey: "workingHoursEnabled")
+        let storedWorkStartHour = UserDefaults.standard.object(forKey: "workStartHour") as? Int
+        let storedWorkStartMinute = UserDefaults.standard.integer(forKey: "workStartMinute")
+        let storedWorkEndHour = UserDefaults.standard.object(forKey: "workEndHour") as? Int
+        let storedWorkEndMinute = UserDefaults.standard.integer(forKey: "workEndMinute")
         
         // Initialize all properties with defaults if needed
         self.promptIntervalMinutes = storedInterval == 0 ? 30 : storedInterval
@@ -52,5 +77,26 @@ class SettingsManager: ObservableObject {
         self.projectPath = storedProjectPath ?? ""
         self.autoStartServer = storedAutoStartServer
         self.serverPort = storedServerPort == 0 ? 5001 : storedServerPort
+        self.workingHoursEnabled = storedWorkingHoursEnabled
+        self.workStartHour = storedWorkStartHour ?? 9
+        self.workStartMinute = storedWorkStartMinute
+        self.workEndHour = storedWorkEndHour ?? 17
+        self.workEndMinute = storedWorkEndMinute
+    }
+    
+    /// Check if current time is within working hours
+    func isWithinWorkingHours() -> Bool {
+        guard workingHoursEnabled else { return true }
+        
+        let now = Date()
+        let calendar = Calendar.current
+        let hour = calendar.component(.hour, from: now)
+        let minute = calendar.component(.minute, from: now)
+        
+        let currentMinutes = hour * 60 + minute
+        let startMinutes = workStartHour * 60 + workStartMinute
+        let endMinutes = workEndHour * 60 + workEndMinute
+        
+        return currentMinutes >= startMinutes && currentMinutes < endMinutes
     }
 }

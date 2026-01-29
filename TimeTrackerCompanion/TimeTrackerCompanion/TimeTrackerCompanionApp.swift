@@ -122,7 +122,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
             
             // Start prompt timer with configured interval - Requirements: 2.1
             await MainActor.run {
-                promptManager.start(intervalMinutes: settingsManager.promptIntervalMinutes)
+                promptManager.start(intervalMinutes: settingsManager.promptIntervalMinutes, settingsManager: settingsManager)
             }
         } catch {
             // Log and show startup error - Requirements: 6.4

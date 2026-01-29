@@ -35,6 +35,51 @@ struct SettingsView: View {
                 Text("How often you'll be prompted to log your time.")
             }
             
+            // Working Hours Section
+            Section {
+                Toggle("Only prompt during working hours", isOn: $settingsManager.workingHoursEnabled)
+                
+                if settingsManager.workingHoursEnabled {
+                    HStack {
+                        Text("Start:")
+                        Picker(String(format: "%02d", settingsManager.workStartHour), selection: $settingsManager.workStartHour) {
+                            ForEach(0..<24, id: \.self) { hour in
+                                Text(String(format: "%02d", hour)).tag(hour)
+                            }
+                        }
+                        .frame(width: 60)
+                        Text(":")
+                        Picker(String(format: "%02d", settingsManager.workStartMinute), selection: $settingsManager.workStartMinute) {
+                            ForEach([0, 15, 30, 45], id: \.self) { minute in
+                                Text(String(format: "%02d", minute)).tag(minute)
+                            }
+                        }
+                        .frame(width: 60)
+                        
+                        Spacer()
+                        
+                        Text("End:")
+                        Picker(String(format: "%02d", settingsManager.workEndHour), selection: $settingsManager.workEndHour) {
+                            ForEach(0..<24, id: \.self) { hour in
+                                Text(String(format: "%02d", hour)).tag(hour)
+                            }
+                        }
+                        .frame(width: 60)
+                        Text(":")
+                        Picker(String(format: "%02d", settingsManager.workEndMinute), selection: $settingsManager.workEndMinute) {
+                            ForEach([0, 15, 30, 45], id: \.self) { minute in
+                                Text(String(format: "%02d", minute)).tag(minute)
+                            }
+                        }
+                        .frame(width: 60)
+                    }
+                }
+            } header: {
+                Text("Working Hours")
+            } footer: {
+                Text("Prompts will be suppressed outside these hours.")
+            }
+            
             // Backend URL Section - Requirements: 4.3
             Section {
                 TextField("Backend URL", text: $settingsManager.backendURL)
@@ -200,7 +245,7 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
-        .frame(width: 500, height: 600)
+        .frame(width: 500, height: 700)
         .task {
             await loadGroups()
             await testConnection()

@@ -13,12 +13,14 @@ class PromptManager: ObservableObject {
     private var timer: Timer?
     private var intervalMinutes: Int = 30
     private var lastPromptTime: Date?
+    private weak var settingsManager: SettingsManager?
     
     /// Start the prompt timer with the specified interval
     /// - Parameter intervalMinutes: Minutes between prompts
     /// - Requirements: 2.1
-    func start(intervalMinutes: Int) {
+    func start(intervalMinutes: Int, settingsManager: SettingsManager? = nil) {
         self.intervalMinutes = intervalMinutes
+        self.settingsManager = settingsManager
         scheduleNextPrompt()
     }
     
@@ -69,7 +71,7 @@ class PromptManager: ObservableObject {
             if self.timeUntilNextPrompt <= 0 {
                 if self.skipNextPrompt {
                     self.skipNextPrompt = false
-                } else {
+                } else if self.settingsManager?.isWithinWorkingHours() ?? true {
                     self.showPrompt = true
                     self.lastPromptTime = Date()
                 }
