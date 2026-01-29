@@ -36,6 +36,20 @@
 </form>
 
 <h2>All Entries</h2>
+
+<div style="display: flex; gap: 15px; align-items: center; margin-bottom: 15px;">
+    <form method="GET" action="{{ url_for('main.entries', group_id=group.id) }}" style="display: flex; gap: 10px; align-items: center; margin: 0;">
+        <label for="month" style="margin: 0;">Filter by Month:</label>
+        <select name="month" id="month" onchange="this.form.submit()" style="width: auto; margin: 0; padding: 8px;">
+            <option value="">All Months</option>
+            {% for m in available_months %}
+            <option value="{{ m }}" {% if m == month_filter %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+        </select>
+    </form>
+    
+    <a href="{{ url_for('main.export_entries', group_id=group.id, month=month_filter) }}" style="background: #28a745; color: white; padding: 8px 15px; text-decoration: none; border-radius: 4px;">Export CSV</a>
+</div>
 {% if entries %}
 <table>
     <thead>

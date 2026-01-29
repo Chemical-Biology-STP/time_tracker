@@ -1,6 +1,8 @@
 """Flask route handlers for Time Tracker."""
+import csv
+import io
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, Response
 from .models import db, ResearchGroup, TimeEntry, TimeBlock
 from .utils import (
     validate_group_name,
@@ -115,9 +117,31 @@ def entries(group_id):
         flash('Time entry added successfully.', 'success')
         return redirect(url_for('main.entries', group_id=group_id))
 
-    # Get entries ordered by date descending
-    all_entries = TimeEntry.query.filter_by(research_group_id=group_id).order_by(TimeEntry.date.desc()).all()
-    return render_template('entries.html', group=group, entries=all_entries)
+    # Get month filter from query params
+    month_filter = request.args.get('month', '')
+    
+    # Build query
+    query = TimeEntry.query.filter_by(research_group_id=group_id)
+    
+    if month_filter:
+        try:
+            year, month = map(int, month_filter.split('-'))
+            from calendar import monthrange
+            start_date = datetime(year, month, 1).date()
+            _, last_day = monthrange(year, month)
+            end_date = datetime(year, month, last_day).date()
+            query = query.filter(TimeEntry.date >= start_date, TimeEntry.date <= end_date)
+        except (ValueError, TypeError):
+            pass
+    
+    all_entries = query.order_by(TimeEntry.date.desc()).all()
+    
+    # Get available months for filter dropdown
+    all_dates = db.session.query(TimeEntry.date).filter_by(research_group_id=group_id).distinct().all()
+    available_months = sorted(set(d[0].strftime('%Y-%m') for d in all_dates), reverse=True)
+    
+    return render_template('entries.html', group=group, entries=all_entries, 
+                          month_filter=month_filter, available_months=available_months)
 
 
 @bp.route('/groups/<int:group_id>/summary')
@@ -135,6 +159,67 @@ def summary(group_id):
         entries=entries,
         total_hours=total_hours,
         total_pay=total_pay
+    )
+
+
+@bp.route('/groups/<int:group_id>/export')
+def export_entries(group_id):
+    """Export entries to CSV file."""
+    group = ResearchGroup.query.get_or_404(group_id)
+    
+    # Get month filter from query params
+    month_filter = request.args.get('month', '')
+    
+    # Build query
+    query = TimeEntry.query.filter_by(research_group_id=group_id)
+    
+    if month_filter:
+        try:
+            year, month = map(int, month_filter.split('-'))
+            from calendar import monthrange
+            start_date = datetime(year, month, 1).date()
+            _, last_day = monthrange(year, month)
+            end_date = datetime(year, month, last_day).date()
+            query = query.filter(TimeEntry.date >= start_date, TimeEntry.date <= end_date)
+        except (ValueError, TypeError):
+            pass
+    
+    entries = query.order_by(TimeEntry.date.desc()).all()
+    
+    # Create CSV
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Date', 'Task Description', 'Time Blocks', 'Total Hours'])
+    
+    for entry in entries:
+        time_blocks_str = '; '.join(
+            f"{b.start_time.strftime('%H:%M')}-{b.end_time.strftime('%H:%M')}"
+            for b in entry.get_sorted_time_blocks()
+        )
+        writer.writerow([
+            entry.date.strftime('%Y-%m-%d'),
+            entry.task_description,
+            time_blocks_str,
+            f"{entry.total_hours:.2f}"
+        ])
+    
+    # Add total row
+    total_hours = sum(e.total_hours for e in entries)
+    writer.writerow([])
+    writer.writerow(['', '', 'Total:', f"{total_hours:.2f}"])
+    
+    output.seek(0)
+    
+    # Generate filename
+    filename = f"{group.name.replace(' ', '_')}_entries"
+    if month_filter:
+        filename += f"_{month_filter}"
+    filename += ".csv"
+    
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename={filename}'}
     )
 
 
