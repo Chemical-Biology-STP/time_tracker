@@ -140,7 +140,7 @@ async function loadSummary() {
   // Calculate pay
   const hourlyRate = settings.hourlyRate || 107.93;
   const totalPay = summary.totalHours * hourlyRate;
-  document.getElementById('totalPay').textContent = '$' + totalPay.toFixed(2);
+  document.getElementById('totalPay').textContent = '£' + totalPay.toFixed(2);
 }
 
 async function submitEntry() {
