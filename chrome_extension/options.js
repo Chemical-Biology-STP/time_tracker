@@ -21,6 +21,7 @@ async function loadSettings() {
   
   document.getElementById('interval').value = settings.promptIntervalMinutes;
   document.getElementById('notifications').checked = settings.notificationsEnabled;
+  document.getElementById('hourlyRate').value = settings.hourlyRate || 107.93;
 }
 
 async function loadGroups() {
@@ -69,6 +70,7 @@ async function saveSettings() {
   const settings = {
     promptIntervalMinutes: parseInt(document.getElementById('interval').value),
     notificationsEnabled: document.getElementById('notifications').checked,
+    hourlyRate: parseFloat(document.getElementById('hourlyRate').value) || 107.93,
     defaultGroupId: document.getElementById('defaultGroup').value ? 
       parseInt(document.getElementById('defaultGroup').value) : null
   };

@@ -95,7 +95,8 @@ const Storage = {
     const data = await chrome.storage.sync.get({
       promptIntervalMinutes: 30,
       defaultGroupId: null,
-      notificationsEnabled: true
+      notificationsEnabled: true,
+      hourlyRate: 107.93
     });
     return data;
   },

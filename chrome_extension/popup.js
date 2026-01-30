@@ -136,6 +136,11 @@ async function loadSummary() {
   
   document.getElementById('totalHours').textContent = summary.totalHours.toFixed(1);
   document.getElementById('totalEntries').textContent = summary.totalEntries;
+  
+  // Calculate pay
+  const hourlyRate = settings.hourlyRate || 107.93;
+  const totalPay = summary.totalHours * hourlyRate;
+  document.getElementById('totalPay').textContent = '$' + totalPay.toFixed(2);
 }
 
 async function submitEntry() {
