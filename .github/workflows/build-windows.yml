@@ -22,16 +22,24 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller pyside6 requests pillow
+          pip install pyinstaller pyside6 requests pillow flask flask-sqlalchemy waitress
       
-      - name: Build executable
+      - name: Build Flask server
+        run: |
+          pyinstaller --clean --noconfirm `
+            --name TimeTrackerServer `
+            --onefile `
+            --console `
+            server_standalone.py
+      
+      - name: Build companion app with bundled server
         run: |
           pyinstaller --clean --noconfirm `
             --name TimeTrackerCompanion `
             --onefile `
             --windowed `
             --icon robot-rainbow.png `
-            --add-data "robot-rainbow.png;." `
+            --add-binary "dist/TimeTrackerServer.exe;." `
             windows_companion/main.py
       
       - name: Upload artifact

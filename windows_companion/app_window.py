@@ -11,6 +11,7 @@ from PySide6.QtCore import QTimer
 
 from api_client import APIClient
 from settings_manager import SettingsManager
+from server_manager import ServerManager
 from prompt_dialog import PromptDialog
 from settings_dialog import SettingsDialog
 
@@ -21,11 +22,15 @@ class TimeTrackerApp:
     def __init__(self):
         self.settings_manager = SettingsManager()
         self.api_client = APIClient(self.settings_manager.backend_url)
+        self.server_manager = ServerManager.shared()
         
         self.tray_icon = None
         self.prompt_timer = None
         self.prompt_dialog = None
         self.settings_dialog = None
+        
+        # Auto-start bundled server
+        self.server_manager.start_server(self.settings_manager.server_port)
         
         self.setup_tray()
         self.setup_timer()
@@ -165,5 +170,6 @@ class TimeTrackerApp:
     def quit_app(self):
         """Quit the application."""
         self.prompt_timer.stop()
+        self.server_manager.stop_server()
         self.tray_icon.hide()
         QApplication.quit()
