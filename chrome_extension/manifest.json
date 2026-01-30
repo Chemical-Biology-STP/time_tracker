@@ -1,16 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "Time Tracker Companion",
-  "version": "1.0.0",
-  "description": "Log time entries to your Time Tracker server",
+  "name": "Time Tracker",
+  "version": "2.0.0",
+  "description": "Track your work time with periodic reminders. Data syncs across devices.",
   "permissions": [
     "storage",
     "alarms",
     "notifications"
-  ],
-  "host_permissions": [
-    "http://localhost:*/*",
-    "http://127.0.0.1:*/*"
   ],
   "action": {
     "default_popup": "popup.html",

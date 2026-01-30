@@ -1,21 +1,14 @@
-// Background service worker for Time Tracker Companion
-
-const DEFAULT_SETTINGS = {
-  backendUrl: 'http://localhost:5001',
-  promptIntervalMinutes: 30,
-  defaultGroupId: null,
-  notificationsEnabled: true
-};
+// Background service worker for Time Tracker
 
 // Initialize alarm on install
-chrome.runtime.onInstalled.addListener(() => {
-  console.log('Time Tracker Companion installed');
-  initializeAlarm();
+chrome.runtime.onInstalled.addListener(async () => {
+  console.log('Time Tracker installed');
+  await initializeAlarm();
 });
 
 // Initialize alarm on startup
-chrome.runtime.onStartup.addListener(() => {
-  initializeAlarm();
+chrome.runtime.onStartup.addListener(async () => {
+  await initializeAlarm();
 });
 
 // Handle alarm
@@ -25,68 +18,42 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
-// Handle notification click
+// Handle notification click - open popup
 chrome.notifications.onClicked.addListener((notificationId) => {
   if (notificationId === 'timeTrackerReminder') {
-    // Open the popup by focusing/creating a window
     chrome.action.openPopup();
   }
 });
 
 async function initializeAlarm() {
-  const settings = await getSettings();
+  const data = await chrome.storage.sync.get({ promptIntervalMinutes: 30 });
   
   // Clear existing alarm
   await chrome.alarms.clear('timeTrackerReminder');
   
   // Create new alarm
   chrome.alarms.create('timeTrackerReminder', {
-    delayInMinutes: settings.promptIntervalMinutes,
-    periodInMinutes: settings.promptIntervalMinutes
+    delayInMinutes: data.promptIntervalMinutes,
+    periodInMinutes: data.promptIntervalMinutes
   });
   
-  console.log(`Alarm set for every ${settings.promptIntervalMinutes} minutes`);
+  console.log(`Reminder alarm set for every ${data.promptIntervalMinutes} minutes`);
 }
 
 async function showReminder() {
-  const settings = await getSettings();
+  const data = await chrome.storage.sync.get({ notificationsEnabled: true });
   
-  if (!settings.notificationsEnabled) {
+  if (!data.notificationsEnabled) {
     return;
   }
   
-  // Check if server is reachable
-  const connected = await checkConnection(settings.backendUrl);
-  
-  if (connected) {
-    chrome.notifications.create('timeTrackerReminder', {
-      type: 'basic',
-      iconUrl: 'icons/icon128.png',
-      title: 'Time Tracker',
-      message: 'Time to log what you\'ve been working on!',
-      priority: 2,
-      requireInteraction: true
-    });
-  }
-}
-
-async function checkConnection(backendUrl) {
-  try {
-    const response = await fetch(`${backendUrl}/api/health`, {
-      method: 'GET',
-      signal: AbortSignal.timeout(5000)
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
-
-async function getSettings() {
-  return new Promise((resolve) => {
-    chrome.storage.sync.get(DEFAULT_SETTINGS, (result) => {
-      resolve(result);
-    });
+  chrome.notifications.create('timeTrackerReminder', {
+    type: 'basic',
+    iconUrl: 'icons/icon128.png',
+    title: 'Time Tracker',
+    message: 'Time to log what you\'ve been working on!',
+    priority: 2,
+    requireInteraction: true
   });
 }
 
@@ -94,17 +61,5 @@ async function getSettings() {
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === 'sync' && changes.promptIntervalMinutes) {
     initializeAlarm();
-  }
-});
-
-// Message handler for popup/options communication
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'getSettings') {
-    getSettings().then(sendResponse);
-    return true;
-  }
-  if (request.action === 'checkConnection') {
-    checkConnection(request.url).then(sendResponse);
-    return true;
   }
 });

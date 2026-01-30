@@ -1,52 +1,58 @@
-# Time Tracker Companion - Chrome Extension
+# Time Tracker - Chrome Extension
 
-A Chrome extension for logging time entries to your Time Tracker server.
+A fully standalone Chrome extension for tracking work time. No server required - data syncs automatically across devices via your Google account.
 
 ## Features
 
-- Quick time logging popup
-- Periodic reminder notifications
-- Research group selection with default group support
-- Editable start/end times
-- Connection status monitoring
-- Settings sync across Chrome instances
+- ⏱️ Quick time logging popup
+- 🔔 Periodic reminder notifications
+- 📊 View entries and summary statistics
+- 📥 Export to CSV for reporting
+- 🔄 Auto-sync across all your Chrome browsers
+- 👥 Multiple research groups support
 
 ## Installation
 
-### From Source (Developer Mode)
+1. Download or clone this repository
+2. Open Chrome and go to `chrome://extensions/`
+3. Enable "Developer mode" (toggle in top right)
+4. Click "Load unpacked"
+5. Select the `chrome_extension` folder
+6. Pin the extension to your toolbar for easy access
 
-1. Open Chrome and go to `chrome://extensions/`
-2. Enable "Developer mode" (toggle in top right)
-3. Click "Load unpacked"
-4. Select the `chrome_extension` folder
-5. The extension icon should appear in your toolbar
+## Usage
 
-### Usage
-
-1. Click the extension icon to open the time logging popup
-2. Enter your task description
+### Logging Time
+1. Click the extension icon
+2. Enter what you've been working on
 3. Select a research group
 4. Adjust start/end times if needed
 5. Click Submit
 
+### Viewing Entries
+- Click the "Entries" tab to see your logged time
+- Filter by research group
+- Export to CSV for spreadsheet analysis
+
 ### Settings
+- Click ⚙️ Settings or right-click extension → Options
+- Set reminder interval (15, 30, 45, or 60 minutes)
+- Enable/disable notifications
+- Manage research groups
+- Set default group
 
-Click "Settings" in the popup or right-click the extension icon → Options:
+## Data Storage
 
-- **Backend URL**: Your Flask server address (default: http://localhost:5001)
-- **Reminder Interval**: How often to show notifications (15, 30, 45, or 60 minutes)
-- **Enable Notifications**: Toggle reminder notifications
-- **Default Research Group**: Pre-selected group when logging time
-
-## Requirements
-
-- The Flask Time Tracker server must be running
-- For local use: `http://localhost:5001`
-- For shared server: Update the Backend URL in settings
+Your data is stored in Chrome's sync storage:
+- Automatically syncs across all Chrome browsers where you're signed in
+- No server or account setup required
+- Data persists even if you reinstall the extension
+- Export to JSON for backup
 
 ## Permissions
 
-- `storage`: Save your settings
-- `alarms`: Schedule reminder notifications
+- `storage`: Save your time entries and settings
+- `alarms`: Schedule reminder notifications  
 - `notifications`: Show reminder popups
-- `host_permissions`: Connect to localhost/127.0.0.1
+
+No network permissions needed - everything stays local to Chrome!

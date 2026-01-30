@@ -1,28 +1,63 @@
-// Popup script for Time Tracker Companion
+// Popup script for Time Tracker
 
-let settings = {};
 let groups = [];
+let settings = {};
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Load settings
-  settings = await chrome.storage.sync.get({
-    backendUrl: 'http://localhost:5001',
-    promptIntervalMinutes: 30,
-    defaultGroupId: null
-  });
+  // Load data
+  groups = await Storage.getGroups();
+  settings = await Storage.getSettings();
   
-  // Set up UI
-  initializeTimeFields();
-  await loadGroups();
-  await checkConnection();
+  // Initialize UI
+  initializeTabs();
+  initializeLogPanel();
+  initializeEntriesPanel();
+  initializeSummaryPanel();
   
   // Event listeners
   document.getElementById('submitBtn').addEventListener('click', submitEntry);
   document.getElementById('settingsBtn').addEventListener('click', openSettings);
-  document.getElementById('webLink').addEventListener('click', openWebUI);
+  document.getElementById('exportBtn').addEventListener('click', exportCSV);
+  document.getElementById('entriesGroupFilter').addEventListener('change', loadEntries);
+  document.getElementById('summaryGroupFilter').addEventListener('change', loadSummary);
 });
 
-function initializeTimeFields() {
+function initializeTabs() {
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      // Update tabs
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      
+      // Update panels
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      document.getElementById(tab.dataset.panel).classList.add('active');
+      
+      // Refresh data when switching tabs
+      if (tab.dataset.panel === 'entries') loadEntries();
+      if (tab.dataset.panel === 'summary') loadSummary();
+    });
+  });
+}
+
+function initializeLogPanel() {
+  // Populate groups dropdown
+  const groupSelect = document.getElementById('group');
+  groupSelect.innerHTML = '<option value="">Select a group</option>';
+  
+  if (groups.length === 0) {
+    groupSelect.innerHTML = '<option value="">No groups - add in Settings</option>';
+  } else {
+    groups.forEach(g => {
+      const option = document.createElement('option');
+      option.value = g.id;
+      option.textContent = g.name;
+      if (g.id === settings.defaultGroupId) option.selected = true;
+      groupSelect.appendChild(option);
+    });
+  }
+  
+  // Set default times
   const now = new Date();
   const intervalMs = settings.promptIntervalMinutes * 60 * 1000;
   const start = new Date(now.getTime() - intervalMs);
@@ -31,62 +66,76 @@ function initializeTimeFields() {
   document.getElementById('startTime').value = formatTime(start);
 }
 
-function formatTime(date) {
-  return date.toTimeString().slice(0, 5);
+function initializeEntriesPanel() {
+  // Populate filter dropdown
+  const filter = document.getElementById('entriesGroupFilter');
+  filter.innerHTML = '<option value="">All Groups</option>';
+  groups.forEach(g => {
+    const option = document.createElement('option');
+    option.value = g.id;
+    option.textContent = g.name;
+    filter.appendChild(option);
+  });
+  
+  loadEntries();
 }
 
-async function loadGroups() {
-  const groupSelect = document.getElementById('group');
+function initializeSummaryPanel() {
+  // Populate filter dropdown
+  const filter = document.getElementById('summaryGroupFilter');
+  filter.innerHTML = '<option value="">All Groups</option>';
+  groups.forEach(g => {
+    const option = document.createElement('option');
+    option.value = g.id;
+    option.textContent = g.name;
+    filter.appendChild(option);
+  });
   
-  try {
-    const response = await fetch(`${settings.backendUrl}/api/groups`);
-    if (!response.ok) throw new Error('Failed to fetch groups');
-    
-    groups = await response.json();
-    
-    groupSelect.innerHTML = '';
-    
-    if (groups.length === 0) {
-      groupSelect.innerHTML = '<option value="">No groups available</option>';
-      return;
-    }
-    
-    groupSelect.innerHTML = '<option value="">Select a group</option>';
-    groups.forEach(group => {
-      const option = document.createElement('option');
-      option.value = group.id;
-      option.textContent = group.name;
-      if (group.id === settings.defaultGroupId) {
-        option.selected = true;
-      }
-      groupSelect.appendChild(option);
-    });
-    
-  } catch (error) {
-    groupSelect.innerHTML = '<option value="">Failed to load groups</option>';
-    showError('Could not connect to server');
-  }
+  loadSummary();
 }
 
-async function checkConnection() {
-  const statusDot = document.getElementById('statusDot');
-  const statusText = document.getElementById('statusText');
+async function loadEntries() {
+  const groupId = document.getElementById('entriesGroupFilter').value;
+  let entries = await Storage.getEntries();
   
-  try {
-    const response = await fetch(`${settings.backendUrl}/api/health`, {
-      signal: AbortSignal.timeout(5000)
-    });
-    
-    if (response.ok) {
-      statusDot.className = 'status-dot connected';
-      statusText.textContent = 'Connected';
-    } else {
-      throw new Error('Not OK');
-    }
-  } catch {
-    statusDot.className = 'status-dot disconnected';
-    statusText.textContent = 'Disconnected';
+  if (groupId) {
+    entries = entries.filter(e => e.groupId === parseInt(groupId));
   }
+  
+  // Sort by date descending
+  entries.sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+  
+  const container = document.getElementById('entriesList');
+  
+  if (entries.length === 0) {
+    container.innerHTML = '<div class="empty-state">No entries yet</div>';
+    return;
+  }
+  
+  const groupMap = {};
+  groups.forEach(g => groupMap[g.id] = g);
+  
+  container.innerHTML = entries.slice(0, 50).map(e => {
+    const group = groupMap[e.groupId] || { name: 'Unknown' };
+    return `
+      <div class="entry-item">
+        <div class="entry-date">${e.date} • ${group.name}</div>
+        <div class="entry-task">${escapeHtml(e.taskDescription)}</div>
+        <div class="entry-meta">
+          <span>${e.startTime} - ${e.endTime}</span>
+          <span class="entry-hours">${e.totalHours}h</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function loadSummary() {
+  const groupId = document.getElementById('summaryGroupFilter').value;
+  const summary = await Storage.getSummary(groupId ? parseInt(groupId) : null);
+  
+  document.getElementById('totalHours').textContent = summary.totalHours.toFixed(1);
+  document.getElementById('totalEntries').textContent = summary.totalEntries;
 }
 
 async function submitEntry() {
@@ -97,88 +146,82 @@ async function submitEntry() {
   
   // Validation
   if (!task) {
-    showError('Please enter a task description');
+    showMessage('Please enter a task description', 'error');
     return;
   }
   
   if (!groupId) {
-    showError('Please select a research group');
+    showMessage('Please select a research group', 'error');
     return;
   }
   
   if (!startTime || !endTime) {
-    showError('Please enter start and end times');
+    showMessage('Please enter start and end times', 'error');
     return;
   }
   
   // Disable button
-  const submitBtn = document.getElementById('submitBtn');
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Submitting...';
-  hideError();
-  hideSuccess();
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
   
   try {
-    const response = await fetch(`${settings.backendUrl}/api/entries`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        research_group_id: parseInt(groupId),
-        task_description: task,
-        date: new Date().toISOString().split('T')[0],
-        start_time: startTime,
-        end_time: endTime
-      })
-    });
+    const entry = await Storage.addEntry(
+      parseInt(groupId),
+      task,
+      new Date().toISOString().split('T')[0],
+      startTime,
+      endTime
+    );
     
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to create entry');
-    }
-    
-    const result = await response.json();
-    showSuccess(`Logged ${result.total_hours.toFixed(2)} hours`);
+    showMessage(`Logged ${entry.totalHours} hours`, 'success');
     
     // Clear form
     document.getElementById('task').value = '';
-    initializeTimeFields();
+    initializeLogPanel();
     
   } catch (error) {
-    showError(error.message);
+    showMessage('Failed to save: ' + error.message, 'error');
   } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Submit';
+    btn.disabled = false;
+    btn.textContent = 'Submit';
   }
 }
 
-function showError(message) {
-  const errorEl = document.getElementById('error');
-  errorEl.textContent = message;
-  errorEl.classList.add('show');
+async function exportCSV() {
+  const csv = await Storage.exportCSV();
+  
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `time-tracker-${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  
+  URL.revokeObjectURL(url);
 }
 
-function hideError() {
-  document.getElementById('error').classList.remove('show');
-}
-
-function showSuccess(message) {
-  const successEl = document.getElementById('success');
-  successEl.textContent = message;
-  successEl.classList.add('show');
-}
-
-function hideSuccess() {
-  document.getElementById('success').classList.remove('show');
-}
-
-function openSettings(e) {
-  e.preventDefault();
+function openSettings() {
   chrome.runtime.openOptionsPage();
 }
 
-function openWebUI(e) {
-  e.preventDefault();
-  chrome.tabs.create({ url: settings.backendUrl });
+function showMessage(text, type) {
+  const el = document.getElementById('logMessage');
+  el.textContent = text;
+  el.className = 'message ' + type;
+  
+  if (type === 'success') {
+    setTimeout(() => el.className = 'message', 3000);
+  }
+}
+
+function formatTime(date) {
+  return date.toTimeString().slice(0, 5);
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }

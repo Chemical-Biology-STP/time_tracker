@@ -1,101 +1,111 @@
-// Options page script for Time Tracker Companion
+// Options page script for Time Tracker
 
 let groups = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
   await loadSettings();
   await loadGroups();
-  await checkConnection();
   
   // Event listeners
   document.getElementById('saveBtn').addEventListener('click', saveSettings);
-  document.getElementById('testBtn').addEventListener('click', checkConnection);
-  document.getElementById('backendUrl').addEventListener('change', () => {
-    loadGroups();
-    checkConnection();
-  });
+  document.getElementById('addGroupBtn').addEventListener('click', showNewGroupForm);
+  document.getElementById('saveGroupBtn').addEventListener('click', saveNewGroup);
+  document.getElementById('cancelGroupBtn').addEventListener('click', hideNewGroupForm);
+  document.getElementById('exportJsonBtn').addEventListener('click', exportJSON);
+  document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
+  document.getElementById('clearDataBtn').addEventListener('click', clearAllData);
 });
 
 async function loadSettings() {
-  const settings = await chrome.storage.sync.get({
-    backendUrl: 'http://localhost:5001',
-    promptIntervalMinutes: 30,
-    defaultGroupId: null,
-    notificationsEnabled: true
-  });
+  const settings = await Storage.getSettings();
   
-  document.getElementById('backendUrl').value = settings.backendUrl;
   document.getElementById('interval').value = settings.promptIntervalMinutes;
   document.getElementById('notifications').checked = settings.notificationsEnabled;
 }
 
-async function saveSettings() {
-  const settings = {
-    backendUrl: document.getElementById('backendUrl').value.trim(),
-    promptIntervalMinutes: parseInt(document.getElementById('interval').value),
-    defaultGroupId: document.getElementById('defaultGroup').value ? 
-      parseInt(document.getElementById('defaultGroup').value) : null,
-    notificationsEnabled: document.getElementById('notifications').checked
-  };
+async function loadGroups() {
+  groups = await Storage.getGroups();
+  const settings = await Storage.getSettings();
   
-  await chrome.storage.sync.set(settings);
+  // Update default group dropdown
+  const defaultSelect = document.getElementById('defaultGroup');
+  defaultSelect.innerHTML = '<option value="">None</option>';
+  groups.forEach(g => {
+    const option = document.createElement('option');
+    option.value = g.id;
+    option.textContent = g.name;
+    if (g.id === settings.defaultGroupId) option.selected = true;
+    defaultSelect.appendChild(option);
+  });
   
-  // Show saved message
-  const savedMessage = document.getElementById('savedMessage');
-  savedMessage.classList.add('show');
-  setTimeout(() => savedMessage.classList.remove('show'), 2000);
+  // Update groups list
+  const list = document.getElementById('groupsList');
+  
+  if (groups.length === 0) {
+    list.innerHTML = '<div class="empty-state">No groups yet. Add one to get started!</div>';
+    return;
+  }
+  
+  list.innerHTML = groups.map(g => `
+    <div class="group-item">
+      <div class="group-info">
+        <div class="group-name">${escapeHtml(g.name)}</div>
+        <div class="group-meta">
+          ${g.projectName ? escapeHtml(g.projectName) : ''}
+          ${g.managerName ? ' • ' + escapeHtml(g.managerName) : ''}
+        </div>
+      </div>
+      <button class="delete-btn" data-id="${g.id}" title="Delete group">🗑️</button>
+    </div>
+  `).join('');
+  
+  // Add delete handlers
+  list.querySelectorAll('.delete-btn').forEach(btn => {
+    btn.addEventListener('click', () => deleteGroup(parseInt(btn.dataset.id)));
+  });
 }
 
-async function loadGroups() {
-  const backendUrl = document.getElementById('backendUrl').value.trim();
-  const defaultGroupSelect = document.getElementById('defaultGroup');
-  const groupsList = document.getElementById('groupsList');
+async function saveSettings() {
+  const settings = {
+    promptIntervalMinutes: parseInt(document.getElementById('interval').value),
+    notificationsEnabled: document.getElementById('notifications').checked,
+    defaultGroupId: document.getElementById('defaultGroup').value ? 
+      parseInt(document.getElementById('defaultGroup').value) : null
+  };
   
-  try {
-    const response = await fetch(`${backendUrl}/api/groups`);
-    if (!response.ok) throw new Error('Failed to fetch');
-    
-    groups = await response.json();
-    
-    // Get current default
-    const settings = await chrome.storage.sync.get({ defaultGroupId: null });
-    
-    // Update default group dropdown
-    defaultGroupSelect.innerHTML = '<option value="">None</option>';
-    groups.forEach(group => {
-      const option = document.createElement('option');
-      option.value = group.id;
-      option.textContent = group.name;
-      if (group.id === settings.defaultGroupId) {
-        option.selected = true;
-      }
-      defaultGroupSelect.appendChild(option);
-    });
-    
-    // Update groups list
-    if (groups.length === 0) {
-      groupsList.innerHTML = '<div class="group-item" style="color: #888;">No groups available</div>';
-    } else {
-      groupsList.innerHTML = groups.map(group => `
-        <div class="group-item">
-          <div>
-            <div class="group-name">${escapeHtml(group.name)}</div>
-            <div class="group-project">${escapeHtml(group.project_name || '')}</div>
-          </div>
-          <button class="delete-btn" data-id="${group.id}" title="Delete group">🗑️</button>
-        </div>
-      `).join('');
-      
-      // Add delete handlers
-      groupsList.querySelectorAll('.delete-btn').forEach(btn => {
-        btn.addEventListener('click', () => deleteGroup(parseInt(btn.dataset.id)));
-      });
-    }
-    
-  } catch (error) {
-    defaultGroupSelect.innerHTML = '<option value="">Failed to load</option>';
-    groupsList.innerHTML = '<div class="group-item" style="color: #e74c3c;">Could not connect to server</div>';
+  await Storage.saveSettings(settings);
+  
+  // Show saved message
+  const msg = document.getElementById('savedMessage');
+  msg.classList.add('show');
+  setTimeout(() => msg.classList.remove('show'), 2000);
+}
+
+function showNewGroupForm() {
+  document.getElementById('newGroupForm').classList.add('show');
+  document.getElementById('newGroupName').focus();
+}
+
+function hideNewGroupForm() {
+  document.getElementById('newGroupForm').classList.remove('show');
+  document.getElementById('newGroupName').value = '';
+  document.getElementById('newManagerName').value = '';
+  document.getElementById('newProjectName').value = '';
+}
+
+async function saveNewGroup() {
+  const name = document.getElementById('newGroupName').value.trim();
+  const managerName = document.getElementById('newManagerName').value.trim();
+  const projectName = document.getElementById('newProjectName').value.trim();
+  
+  if (!name) {
+    alert('Please enter a group name');
+    return;
   }
+  
+  await Storage.addGroup(name, managerName, projectName);
+  hideNewGroupForm();
+  await loadGroups();
 }
 
 async function deleteGroup(groupId) {
@@ -104,51 +114,60 @@ async function deleteGroup(groupId) {
     return;
   }
   
-  const backendUrl = document.getElementById('backendUrl').value.trim();
+  await Storage.deleteGroup(groupId);
   
-  try {
-    const response = await fetch(`${backendUrl}/api/groups/${groupId}`, {
-      method: 'DELETE'
-    });
-    
-    if (response.ok) {
-      // Clear default if it was deleted
-      const settings = await chrome.storage.sync.get({ defaultGroupId: null });
-      if (settings.defaultGroupId === groupId) {
-        await chrome.storage.sync.set({ defaultGroupId: null });
-      }
-      await loadGroups();
-    } else {
-      alert('Failed to delete group');
-    }
-  } catch (error) {
-    alert('Error deleting group: ' + error.message);
+  // Clear default if deleted
+  const settings = await Storage.getSettings();
+  if (settings.defaultGroupId === groupId) {
+    await Storage.saveSettings({ ...settings, defaultGroupId: null });
   }
+  
+  await loadGroups();
 }
 
-async function checkConnection() {
-  const backendUrl = document.getElementById('backendUrl').value.trim();
-  const statusDot = document.getElementById('statusDot');
-  const statusText = document.getElementById('statusText');
+async function exportJSON() {
+  const data = await Storage.exportData();
+  const json = JSON.stringify(data, null, 2);
   
-  statusDot.className = 'status-dot checking';
-  statusText.textContent = 'Checking...';
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
   
-  try {
-    const response = await fetch(`${backendUrl}/api/health`, {
-      signal: AbortSignal.timeout(5000)
-    });
-    
-    if (response.ok) {
-      statusDot.className = 'status-dot connected';
-      statusText.textContent = 'Connected';
-    } else {
-      throw new Error('Not OK');
-    }
-  } catch {
-    statusDot.className = 'status-dot disconnected';
-    statusText.textContent = 'Disconnected';
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `time-tracker-backup-${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  
+  URL.revokeObjectURL(url);
+}
+
+async function exportCSV() {
+  const csv = await Storage.exportCSV();
+  
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `time-tracker-${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  
+  URL.revokeObjectURL(url);
+}
+
+async function clearAllData() {
+  if (!confirm('Are you sure you want to delete ALL data? This cannot be undone.')) {
+    return;
   }
+  
+  if (!confirm('Really delete everything? Last chance!')) {
+    return;
+  }
+  
+  await chrome.storage.sync.clear();
+  await loadGroups();
+  await loadSettings();
+  
+  alert('All data has been cleared.');
 }
 
 function escapeHtml(text) {
