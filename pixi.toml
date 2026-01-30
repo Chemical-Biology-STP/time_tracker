@@ -1,12 +1,14 @@
 [workspace]
 channels = ["conda-forge"]
 name = "time_tracker"
-platforms = ["osx-arm64"]
+platforms = ["osx-arm64", "win-64"]
 version = "0.1.0"
 
 [tasks]
 run = "flask --app run:app run --debug"
 build-server = "pyinstaller --clean --noconfirm time_tracker_server.spec"
+run-companion = "python windows_companion/main.py"
+build-companion = "pyinstaller --clean --noconfirm windows_companion.spec"
 
 [dependencies]
 pandas = ">=3.0.0,<4"
@@ -17,3 +19,5 @@ pytest = ">=8.0.0,<9"
 hypothesis = ">=6.0.0,<7"
 pyinstaller = ">=6.0.0,<7"
 waitress = ">=3.0.0,<4"
+pyside6 = ">=6.5.0,<7"
+requests = ">=2.31.0,<3"
