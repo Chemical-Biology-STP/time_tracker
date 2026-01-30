@@ -277,7 +277,9 @@ async function exportCSV() {
   const hourlyRate = settings.hourlyRate || 107.93;
   const csv = await Storage.exportCSV(hourlyRate);
   
-  const blob = new Blob([csv], { type: 'text/csv' });
+  // Add UTF-8 BOM for Excel compatibility
+  const BOM = '\uFEFF';
+  const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   
   const a = document.createElement('a');
