@@ -19,7 +19,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('settingsBtn').addEventListener('click', openSettings);
   document.getElementById('exportBtn').addEventListener('click', exportCSV);
   document.getElementById('entriesGroupFilter').addEventListener('change', loadEntries);
+  document.getElementById('entriesYearFilter').addEventListener('change', loadEntries);
+  document.getElementById('entriesMonthFilter').addEventListener('change', loadEntries);
   document.getElementById('summaryGroupFilter').addEventListener('change', loadSummary);
+  document.getElementById('summaryYearFilter').addEventListener('change', loadSummary);
+  document.getElementById('summaryMonthFilter').addEventListener('change', loadSummary);
 });
 
 function initializeTabs() {
@@ -77,6 +81,7 @@ function initializeEntriesPanel() {
     filter.appendChild(option);
   });
   
+  populateDateFilters('entries');
   loadEntries();
 }
 
@@ -91,15 +96,72 @@ function initializeSummaryPanel() {
     filter.appendChild(option);
   });
   
+  populateDateFilters('summary');
   loadSummary();
+}
+
+async function populateDateFilters(prefix) {
+  const entries = await Storage.getEntries();
+  
+  // Get unique years and months from entries
+  const years = new Set();
+  entries.forEach(e => {
+    if (e.date) {
+      years.add(e.date.substring(0, 4));
+    }
+  });
+  
+  // Populate year filter
+  const yearFilter = document.getElementById(`${prefix}YearFilter`);
+  yearFilter.innerHTML = '<option value="">All Years</option>';
+  Array.from(years).sort().reverse().forEach(year => {
+    const option = document.createElement('option');
+    option.value = year;
+    option.textContent = year;
+    yearFilter.appendChild(option);
+  });
+  
+  // Populate month filter
+  const monthFilter = document.getElementById(`${prefix}MonthFilter`);
+  monthFilter.innerHTML = '<option value="">All Months</option>';
+  const months = [
+    { value: '01', label: 'January' },
+    { value: '02', label: 'February' },
+    { value: '03', label: 'March' },
+    { value: '04', label: 'April' },
+    { value: '05', label: 'May' },
+    { value: '06', label: 'June' },
+    { value: '07', label: 'July' },
+    { value: '08', label: 'August' },
+    { value: '09', label: 'September' },
+    { value: '10', label: 'October' },
+    { value: '11', label: 'November' },
+    { value: '12', label: 'December' }
+  ];
+  months.forEach(m => {
+    const option = document.createElement('option');
+    option.value = m.value;
+    option.textContent = m.label;
+    monthFilter.appendChild(option);
+  });
 }
 
 async function loadEntries() {
   const groupId = document.getElementById('entriesGroupFilter').value;
+  const year = document.getElementById('entriesYearFilter').value;
+  const month = document.getElementById('entriesMonthFilter').value;
   let entries = await Storage.getEntries();
   
   if (groupId) {
     entries = entries.filter(e => e.groupId === parseInt(groupId));
+  }
+  
+  if (year) {
+    entries = entries.filter(e => e.date && e.date.startsWith(year));
+  }
+  
+  if (month) {
+    entries = entries.filter(e => e.date && e.date.substring(5, 7) === month);
   }
   
   // Sort by date descending
@@ -108,7 +170,7 @@ async function loadEntries() {
   const container = document.getElementById('entriesList');
   
   if (entries.length === 0) {
-    container.innerHTML = '<div class="empty-state">No entries yet</div>';
+    container.innerHTML = '<div class="empty-state">No entries found</div>';
     return;
   }
   
@@ -132,14 +194,32 @@ async function loadEntries() {
 
 async function loadSummary() {
   const groupId = document.getElementById('summaryGroupFilter').value;
-  const summary = await Storage.getSummary(groupId ? parseInt(groupId) : null);
+  const year = document.getElementById('summaryYearFilter').value;
+  const month = document.getElementById('summaryMonthFilter').value;
   
-  document.getElementById('totalHours').textContent = summary.totalHours.toFixed(1);
-  document.getElementById('totalEntries').textContent = summary.totalEntries;
+  let entries = await Storage.getEntries();
+  
+  if (groupId) {
+    entries = entries.filter(e => e.groupId === parseInt(groupId));
+  }
+  
+  if (year) {
+    entries = entries.filter(e => e.date && e.date.startsWith(year));
+  }
+  
+  if (month) {
+    entries = entries.filter(e => e.date && e.date.substring(5, 7) === month);
+  }
+  
+  const totalHours = entries.reduce((sum, e) => sum + e.totalHours, 0);
+  const totalEntries = entries.length;
+  
+  document.getElementById('totalHours').textContent = totalHours.toFixed(1);
+  document.getElementById('totalEntries').textContent = totalEntries;
   
   // Calculate pay
   const hourlyRate = settings.hourlyRate || 107.93;
-  const totalPay = summary.totalHours * hourlyRate;
+  const totalPay = totalHours * hourlyRate;
   document.getElementById('totalPay').textContent = '£' + totalPay.toFixed(2);
 }
 
