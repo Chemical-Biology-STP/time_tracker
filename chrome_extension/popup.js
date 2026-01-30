@@ -274,7 +274,8 @@ async function submitEntry() {
 }
 
 async function exportCSV() {
-  const csv = await Storage.exportCSV();
+  const hourlyRate = settings.hourlyRate || 107.93;
+  const csv = await Storage.exportCSV(hourlyRate);
   
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);

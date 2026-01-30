@@ -143,7 +143,9 @@ async function exportJSON() {
 }
 
 async function exportCSV() {
-  const csv = await Storage.exportCSV();
+  const settings = await Storage.getSettings();
+  const hourlyRate = settings.hourlyRate || 107.93;
+  const csv = await Storage.exportCSV(hourlyRate);
   
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);

@@ -121,16 +121,17 @@ const Storage = {
   },
 
   // Export entries as CSV
-  async exportCSV() {
+  async exportCSV(hourlyRate = 107.93) {
     const groups = await this.getGroups();
     const entries = await this.getEntries();
     
     const groupMap = {};
     groups.forEach(g => groupMap[g.id] = g);
     
-    const headers = ['Date', 'Group', 'Project', 'Manager', 'Task', 'Start', 'End', 'Hours'];
+    const headers = ['Date', 'Group', 'Project', 'Manager', 'Task', 'Start', 'End', 'Hours', 'Amount (£)'];
     const rows = entries.map(e => {
       const group = groupMap[e.groupId] || { name: 'Unknown', projectName: '', managerName: '' };
+      const amount = (e.totalHours * hourlyRate).toFixed(2);
       return [
         e.date,
         group.name,
@@ -139,9 +140,18 @@ const Storage = {
         `"${e.taskDescription.replace(/"/g, '""')}"`,
         e.startTime,
         e.endTime,
-        e.totalHours
+        e.totalHours,
+        amount
       ].join(',');
     });
+    
+    // Calculate totals
+    const totalHours = entries.reduce((sum, e) => sum + e.totalHours, 0);
+    const totalAmount = (totalHours * hourlyRate).toFixed(2);
+    
+    // Add empty row and totals
+    rows.push('');
+    rows.push(`,,,,,,Total,${totalHours.toFixed(2)},${totalAmount}`);
     
     return [headers.join(','), ...rows].join('\n');
   },
