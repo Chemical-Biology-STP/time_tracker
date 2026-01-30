@@ -38,7 +38,7 @@ class TimeTrackerApp:
         icon = QIcon.fromTheme("clock", QIcon())
         if icon.isNull():
             # Fallback: create a simple colored icon
-            from PyQt6.QtGui import QPixmap, QPainter, QColor
+            from PySide6.QtGui import QPixmap, QPainter, QColor
             pixmap = QPixmap(32, 32)
             pixmap.fill(QColor(0, 120, 212))
             painter = QPainter(pixmap)
