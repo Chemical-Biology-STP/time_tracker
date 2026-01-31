@@ -66,6 +66,7 @@ function initializeLogPanel() {
   const intervalMs = settings.promptIntervalMinutes * 60 * 1000;
   const start = new Date(now.getTime() - intervalMs);
   
+  document.getElementById('entryDate').value = now.toISOString().split('T')[0];
   document.getElementById('endTime').value = formatTime(now);
   document.getElementById('startTime').value = formatTime(start);
 }
@@ -226,6 +227,7 @@ async function loadSummary() {
 async function submitEntry() {
   const task = document.getElementById('task').value.trim();
   const groupId = document.getElementById('group').value;
+  const entryDate = document.getElementById('entryDate').value;
   const startTime = document.getElementById('startTime').value;
   const endTime = document.getElementById('endTime').value;
   
@@ -237,6 +239,11 @@ async function submitEntry() {
   
   if (!groupId) {
     showMessage('Please select a research group', 'error');
+    return;
+  }
+  
+  if (!entryDate) {
+    showMessage('Please select a date', 'error');
     return;
   }
   
@@ -254,7 +261,7 @@ async function submitEntry() {
     const entry = await Storage.addEntry(
       parseInt(groupId),
       task,
-      new Date().toISOString().split('T')[0],
+      entryDate,
       startTime,
       endTime
     );

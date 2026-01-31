@@ -96,7 +96,10 @@ const Storage = {
       promptIntervalMinutes: 30,
       defaultGroupId: null,
       notificationsEnabled: true,
-      hourlyRate: 107.93
+      hourlyRate: 107.93,
+      workingDays: [1, 2, 3, 4, 5],  // Mon-Fri
+      workStartTime: '09:00',
+      workEndTime: '17:00'
     });
     return data;
   },

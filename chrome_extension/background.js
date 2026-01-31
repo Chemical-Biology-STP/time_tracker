@@ -41,9 +41,34 @@ async function initializeAlarm() {
 }
 
 async function showReminder() {
-  const data = await chrome.storage.sync.get({ notificationsEnabled: true });
+  const data = await chrome.storage.sync.get({ 
+    notificationsEnabled: true,
+    workingDays: [1, 2, 3, 4, 5],  // Mon-Fri by default
+    workStartTime: '09:00',
+    workEndTime: '17:00'
+  });
   
   if (!data.notificationsEnabled) {
+    return;
+  }
+  
+  // Check if today is a working day
+  const now = new Date();
+  const currentDay = now.getDay(); // 0=Sun, 1=Mon, etc.
+  if (!data.workingDays.includes(currentDay)) {
+    console.log('Not a working day, skipping notification');
+    return;
+  }
+  
+  // Check if within working hours
+  const currentTime = now.getHours() * 60 + now.getMinutes();
+  const [startH, startM] = data.workStartTime.split(':').map(Number);
+  const [endH, endM] = data.workEndTime.split(':').map(Number);
+  const startMinutes = startH * 60 + startM;
+  const endMinutes = endH * 60 + endM;
+  
+  if (currentTime < startMinutes || currentTime >= endMinutes) {
+    console.log('Outside working hours, skipping notification');
     return;
   }
   

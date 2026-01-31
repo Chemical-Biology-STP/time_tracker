@@ -65,6 +65,50 @@
       font-size: 14px;
     }
     
+    .days-selector {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    
+    .day-btn {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background: #f5f5f5;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    
+    .day-btn.active {
+      background: #0078d4;
+      color: white;
+      border-color: #0078d4;
+    }
+    
+    .day-btn:hover {
+      background: #e0e0e0;
+    }
+    
+    .day-btn.active:hover {
+      background: #106ebe;
+    }
+    
+    .time-range {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 8px;
+    }
+    
+    .time-range input {
+      width: auto;
+    }
+    
+    .time-range span {
+      color: #666;
+    }
+    
     .checkbox-group {
       display: flex;
       align-items: center;
@@ -219,6 +263,30 @@
         <input type="checkbox" id="notifications">
         <label for="notifications" style="margin-bottom: 0;">Enable notifications</label>
       </div>
+    </div>
+    
+    <div class="form-group">
+      <label>Working Days</label>
+      <div class="days-selector" id="workingDays">
+        <button type="button" class="day-btn" data-day="0">Sun</button>
+        <button type="button" class="day-btn" data-day="1">Mon</button>
+        <button type="button" class="day-btn" data-day="2">Tue</button>
+        <button type="button" class="day-btn" data-day="3">Wed</button>
+        <button type="button" class="day-btn" data-day="4">Thu</button>
+        <button type="button" class="day-btn" data-day="5">Fri</button>
+        <button type="button" class="day-btn" data-day="6">Sat</button>
+      </div>
+      <p class="hint">Notifications will only appear on selected days</p>
+    </div>
+    
+    <div class="form-group">
+      <label>Working Hours</label>
+      <div class="time-range">
+        <input type="time" id="workStartTime" value="09:00">
+        <span>to</span>
+        <input type="time" id="workEndTime" value="17:00">
+      </div>
+      <p class="hint">Notifications will only appear during these hours</p>
     </div>
   </div>
   

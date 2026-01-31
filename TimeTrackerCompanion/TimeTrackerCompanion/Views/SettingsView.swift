@@ -40,6 +40,28 @@ struct SettingsView: View {
                 Toggle("Only prompt during working hours", isOn: $settingsManager.workingHoursEnabled)
                 
                 if settingsManager.workingHoursEnabled {
+                    // Working days
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Working Days")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        HStack(spacing: 8) {
+                            ForEach([(1, "Sun"), (2, "Mon"), (3, "Tue"), (4, "Wed"), (5, "Thu"), (6, "Fri"), (7, "Sat")], id: \.0) { day, name in
+                                Button(action: {
+                                    settingsManager.toggleWorkingDay(day)
+                                }) {
+                                    Text(name)
+                                        .font(.caption)
+                                        .frame(width: 36, height: 28)
+                                        .background(settingsManager.workingDays.contains(day) ? Color.accentColor : Color.gray.opacity(0.2))
+                                        .foregroundColor(settingsManager.workingDays.contains(day) ? .white : .primary)
+                                        .cornerRadius(4)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    
                     HStack {
                         Text("Start:")
                         Picker(String(format: "%02d", settingsManager.workStartHour), selection: $settingsManager.workStartHour) {
@@ -77,7 +99,7 @@ struct SettingsView: View {
             } header: {
                 Text("Working Hours")
             } footer: {
-                Text("Prompts will be suppressed outside these hours.")
+                Text("Prompts will be suppressed outside these hours and days.")
             }
             
             // Backend URL Section - Requirements: 4.3

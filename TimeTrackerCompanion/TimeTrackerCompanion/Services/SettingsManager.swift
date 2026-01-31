@@ -54,6 +54,10 @@ class SettingsManager: ObservableObject {
         didSet { UserDefaults.standard.set(workEndMinute, forKey: "workEndMinute") }
     }
     
+    @Published var workingDays: Set<Int> {
+        didSet { UserDefaults.standard.set(Array(workingDays), forKey: "workingDays") }
+    }
+    
     init() {
         // Read all values first before assigning to avoid Swift initialization order issues
         let storedInterval = UserDefaults.standard.integer(forKey: "promptInterval")
@@ -68,6 +72,7 @@ class SettingsManager: ObservableObject {
         let storedWorkStartMinute = UserDefaults.standard.integer(forKey: "workStartMinute")
         let storedWorkEndHour = UserDefaults.standard.object(forKey: "workEndHour") as? Int
         let storedWorkEndMinute = UserDefaults.standard.integer(forKey: "workEndMinute")
+        let storedWorkingDays = UserDefaults.standard.array(forKey: "workingDays") as? [Int]
         
         // Initialize all properties with defaults if needed
         self.promptIntervalMinutes = storedInterval == 0 ? 30 : storedInterval
@@ -82,21 +87,36 @@ class SettingsManager: ObservableObject {
         self.workStartMinute = storedWorkStartMinute
         self.workEndHour = storedWorkEndHour ?? 17
         self.workEndMinute = storedWorkEndMinute
+        // Default to Monday-Friday (2-6 in Calendar, where 1=Sunday)
+        self.workingDays = storedWorkingDays != nil ? Set(storedWorkingDays!) : Set([2, 3, 4, 5, 6])
     }
     
-    /// Check if current time is within working hours
+    /// Check if current time is within working hours and on a working day
     func isWithinWorkingHours() -> Bool {
         guard workingHoursEnabled else { return true }
         
         let now = Date()
         let calendar = Calendar.current
+        let weekday = calendar.component(.weekday, from: now)
         let hour = calendar.component(.hour, from: now)
         let minute = calendar.component(.minute, from: now)
+        
+        // Check if today is a working day
+        guard workingDays.contains(weekday) else { return false }
         
         let currentMinutes = hour * 60 + minute
         let startMinutes = workStartHour * 60 + workStartMinute
         let endMinutes = workEndHour * 60 + workEndMinute
         
         return currentMinutes >= startMinutes && currentMinutes < endMinutes
+    }
+    
+    /// Toggle a working day
+    func toggleWorkingDay(_ day: Int) {
+        if workingDays.contains(day) {
+            workingDays.remove(day)
+        } else {
+            workingDays.insert(day)
+        }
     }
 }

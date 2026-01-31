@@ -22,6 +22,20 @@ async function loadSettings() {
   document.getElementById('interval').value = settings.promptIntervalMinutes;
   document.getElementById('notifications').checked = settings.notificationsEnabled;
   document.getElementById('hourlyRate').value = settings.hourlyRate || 107.93;
+  
+  // Working days (default Mon-Fri: 1,2,3,4,5)
+  const workingDays = settings.workingDays || [1, 2, 3, 4, 5];
+  document.querySelectorAll('.day-btn').forEach(btn => {
+    const day = parseInt(btn.dataset.day);
+    if (workingDays.includes(day)) {
+      btn.classList.add('active');
+    }
+    btn.addEventListener('click', () => btn.classList.toggle('active'));
+  });
+  
+  // Working hours
+  document.getElementById('workStartTime').value = settings.workStartTime || '09:00';
+  document.getElementById('workEndTime').value = settings.workEndTime || '17:00';
 }
 
 async function loadGroups() {
@@ -67,12 +81,21 @@ async function loadGroups() {
 }
 
 async function saveSettings() {
+  // Get selected working days
+  const workingDays = [];
+  document.querySelectorAll('.day-btn.active').forEach(btn => {
+    workingDays.push(parseInt(btn.dataset.day));
+  });
+  
   const settings = {
     promptIntervalMinutes: parseInt(document.getElementById('interval').value),
     notificationsEnabled: document.getElementById('notifications').checked,
     hourlyRate: parseFloat(document.getElementById('hourlyRate').value) || 107.93,
     defaultGroupId: document.getElementById('defaultGroup').value ? 
-      parseInt(document.getElementById('defaultGroup').value) : null
+      parseInt(document.getElementById('defaultGroup').value) : null,
+    workingDays: workingDays,
+    workStartTime: document.getElementById('workStartTime').value,
+    workEndTime: document.getElementById('workEndTime').value
   };
   
   await Storage.saveSettings(settings);

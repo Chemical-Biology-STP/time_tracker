@@ -20,6 +20,7 @@ struct PromptView: View {
     @State private var isLoadingGroups: Bool = true
     @State private var startTime: Date = Date()
     @State private var endTime: Date = Date()
+    @State private var selectedDate: Date = Date()
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -62,6 +63,15 @@ struct PromptView: View {
                     }
                     .pickerStyle(.menu)
                 }
+            }
+            
+            // Date picker
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Date")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                DatePicker("", selection: $selectedDate, displayedComponents: .date)
+                    .labelsHidden()
             }
             
             // Time pickers
@@ -132,7 +142,8 @@ struct PromptView: View {
     }
     
     private func resetForm() {
-        // Reset time pickers to current time
+        // Reset date and time pickers to current time
+        selectedDate = Date()
         endTime = Date()
         startTime = endTime.addingTimeInterval(-TimeInterval(settingsManager.promptIntervalMinutes * 60))
         // Clear previous task description
@@ -181,7 +192,7 @@ struct PromptView: View {
         let request = TimeEntryRequest(
             research_group_id: groupId,
             task_description: taskDescription.trimmingCharacters(in: .whitespacesAndNewlines),
-            date: dateFormatter.string(from: Date()),
+            date: dateFormatter.string(from: selectedDate),
             start_time: timeFormatter.string(from: startTime),
             end_time: timeFormatter.string(from: endTime)
         )
