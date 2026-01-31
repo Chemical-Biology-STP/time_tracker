@@ -84,4 +84,4 @@ See [LICENSE](LICENSE) file.
 
 Created by **Yew Mun** from the Chemical Biology STP.
 
-[![Let's Connect](https://img.shields.io/badge/Let's%20Connect-Message%20Yew%20Mun-purple?style=flat&logo=github)](https://chemical-biology-stp.github.io/time_tracker/support.html)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?style=flat&logo=buy-me-a-coffee)](https://chemical-biology-stp.github.io/time_tracker/support.html)
