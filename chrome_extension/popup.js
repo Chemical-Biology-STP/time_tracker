@@ -181,8 +181,11 @@ async function loadEntries() {
   container.innerHTML = entries.slice(0, 50).map(e => {
     const group = groupMap[e.groupId] || { name: 'Unknown' };
     return `
-      <div class="entry-item">
-        <div class="entry-date">${e.date} • ${group.name}</div>
+      <div class="entry-item" data-id="${e.id}">
+        <div class="entry-header">
+          <div class="entry-date">${e.date} • ${group.name}</div>
+          <button class="delete-btn" onclick="deleteEntry(${e.id})" title="Delete entry">×</button>
+        </div>
         <div class="entry-task">${escapeHtml(e.taskDescription)}</div>
         <div class="entry-meta">
           <span>${e.startTime} - ${e.endTime}</span>
@@ -319,4 +322,18 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+async function deleteEntry(entryId) {
+  if (!confirm('Delete this entry?')) {
+    return;
+  }
+  
+  try {
+    await Storage.deleteEntry(entryId);
+    loadEntries();
+    loadSummary();
+  } catch (error) {
+    alert('Failed to delete entry: ' + error.message);
+  }
 }

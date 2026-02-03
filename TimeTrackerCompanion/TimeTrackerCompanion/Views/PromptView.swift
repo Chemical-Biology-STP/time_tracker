@@ -137,6 +137,9 @@ struct PromptView: View {
         .onChange(of: promptManager.showPrompt) { isShowing in
             if isShowing {
                 resetForm()
+                Task {
+                    await loadGroups()
+                }
             }
         }
     }
