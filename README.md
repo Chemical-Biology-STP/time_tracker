@@ -80,8 +80,9 @@ Output: `dist/TimeTrackerCompanion.dmg`
 
 See [LICENSE](LICENSE) file.
 
-## Author
+## Credits
 
-Created by **Yew Mun** from the Chemical Biology STP.
+- **Yew Mun** (Chemical Biology STP) - Development
+- **Daniella Hares** (Chemical Biology STP) - App logo design
 
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?style=flat&logo=buy-me-a-coffee)](https://upgraded-giggle-9q6zz54.pages.github.io/support.html)
