@@ -170,6 +170,9 @@ def export_entries(group_id):
     # Get month filter from query params
     month_filter = request.args.get('month', '')
     
+    # Hourly rate for calculating amount (can be overridden via query param)
+    hourly_rate = request.args.get('rate', 107.93, type=float)
+    
     # Build query
     query = TimeEntry.query.filter_by(research_group_id=group_id)
     
@@ -186,27 +189,40 @@ def export_entries(group_id):
     
     entries = query.order_by(TimeEntry.date.desc()).all()
     
-    # Create CSV
+    # Create CSV matching Chrome extension format
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['Date', 'Task Description', 'Time Blocks', 'Total Hours'])
+    writer.writerow(['Date', 'Group', 'Project', 'Manager', 'Task', 'Start', 'End', 'Hours', 'Amount (£)'])
     
     for entry in entries:
-        time_blocks_str = '; '.join(
-            f"{b.start_time.strftime('%H:%M')}-{b.end_time.strftime('%H:%M')}"
-            for b in entry.get_sorted_time_blocks()
-        )
+        # Get first time block for start/end times
+        time_blocks = entry.get_sorted_time_blocks()
+        if time_blocks:
+            start_time = time_blocks[0].start_time.strftime('%H:%M')
+            end_time = time_blocks[-1].end_time.strftime('%H:%M')
+        else:
+            start_time = ''
+            end_time = ''
+        
+        amount = entry.total_hours * hourly_rate
+        
         writer.writerow([
             entry.date.strftime('%Y-%m-%d'),
+            group.name,
+            group.project_name,
+            group.manager_name,
             entry.task_description,
-            time_blocks_str,
-            f"{entry.total_hours:.2f}"
+            start_time,
+            end_time,
+            f"{entry.total_hours:.2f}",
+            f"{amount:.2f}"
         ])
     
     # Add total row
     total_hours = sum(e.total_hours for e in entries)
+    total_amount = total_hours * hourly_rate
     writer.writerow([])
-    writer.writerow(['', '', 'Total:', f"{total_hours:.2f}"])
+    writer.writerow(['', '', '', '', '', '', 'Total', f"{total_hours:.2f}", f"{total_amount:.2f}"])
     
     output.seek(0)
     
@@ -216,9 +232,12 @@ def export_entries(group_id):
         filename += f"_{month_filter}"
     filename += ".csv"
     
+    # Add UTF-8 BOM for Excel compatibility
+    csv_content = '\ufeff' + output.getvalue()
+    
     return Response(
-        output.getvalue(),
-        mimetype='text/csv',
+        csv_content,
+        mimetype='text/csv; charset=utf-8',
         headers={'Content-Disposition': f'attachment; filename={filename}'}
     )
 

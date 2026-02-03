@@ -58,6 +58,10 @@ class SettingsManager: ObservableObject {
         didSet { UserDefaults.standard.set(Array(workingDays), forKey: "workingDays") }
     }
     
+    @Published var hourlyRate: Double {
+        didSet { UserDefaults.standard.set(hourlyRate, forKey: "hourlyRate") }
+    }
+    
     init() {
         // Read all values first before assigning to avoid Swift initialization order issues
         let storedInterval = UserDefaults.standard.integer(forKey: "promptInterval")
@@ -73,6 +77,7 @@ class SettingsManager: ObservableObject {
         let storedWorkEndHour = UserDefaults.standard.object(forKey: "workEndHour") as? Int
         let storedWorkEndMinute = UserDefaults.standard.integer(forKey: "workEndMinute")
         let storedWorkingDays = UserDefaults.standard.array(forKey: "workingDays") as? [Int]
+        let storedHourlyRate = UserDefaults.standard.double(forKey: "hourlyRate")
         
         // Initialize all properties with defaults if needed
         self.promptIntervalMinutes = storedInterval == 0 ? 30 : storedInterval
@@ -89,6 +94,7 @@ class SettingsManager: ObservableObject {
         self.workEndMinute = storedWorkEndMinute
         // Default to Monday-Friday (2-6 in Calendar, where 1=Sunday)
         self.workingDays = storedWorkingDays != nil ? Set(storedWorkingDays!) : Set([2, 3, 4, 5, 6])
+        self.hourlyRate = storedHourlyRate == 0 ? 107.93 : storedHourlyRate
     }
     
     /// Check if current time is within working hours and on a working day

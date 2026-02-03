@@ -102,6 +102,22 @@ struct SettingsView: View {
                 Text("Prompts will be suppressed outside these hours and days.")
             }
             
+            // Hourly Rate Section
+            Section {
+                HStack {
+                    Text("£")
+                    TextField("Hourly Rate", value: $settingsManager.hourlyRate, format: .number.precision(.fractionLength(2)))
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 100)
+                    Text("per hour")
+                        .foregroundColor(.secondary)
+                }
+            } header: {
+                Text("Pay Rate")
+            } footer: {
+                Text("Used for calculating total pay in CSV exports.")
+            }
+            
             // Backend URL Section - Requirements: 4.3
             Section {
                 TextField("Backend URL", text: $settingsManager.backendURL)
@@ -201,73 +217,10 @@ struct SettingsView: View {
             } footer: {
                 Text("Automatically start Time Tracker Companion when you log in.")
             }
-            
-            // Flask Server Section
-            Section {
-                Toggle("Auto-start Flask server", isOn: $settingsManager.autoStartServer)
-                
-                HStack {
-                    Text("Project Path:")
-                    TextField("Path to time_tracker folder", text: $settingsManager.projectPath)
-                        .textFieldStyle(.roundedBorder)
-                    Button("Browse...") {
-                        selectProjectFolder()
-                    }
-                    .buttonStyle(.bordered)
-                }
-                
-                HStack {
-                    Text("Port:")
-                    TextField("Port", value: $settingsManager.serverPort, format: .number)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 80)
-                    
-                    Spacer()
-                    
-                    if FlaskServerManager.shared.isRunning {
-                        HStack {
-                            Circle()
-                                .fill(Color.green)
-                                .frame(width: 8, height: 8)
-                            Text("Server Running")
-                                .foregroundColor(.green)
-                        }
-                    } else {
-                        HStack {
-                            Circle()
-                                .fill(Color.red)
-                                .frame(width: 8, height: 8)
-                            Text("Server Stopped")
-                                .foregroundColor(.red)
-                        }
-                    }
-                }
-                
-                HStack {
-                    Button("Start Server") {
-                        FlaskServerManager.shared.startServer(
-                            projectPath: settingsManager.projectPath,
-                            port: settingsManager.serverPort
-                        )
-                    }
-                    .disabled(settingsManager.projectPath.isEmpty || FlaskServerManager.shared.isRunning)
-                    .buttonStyle(.bordered)
-                    
-                    Button("Stop Server") {
-                        FlaskServerManager.shared.stopServer()
-                    }
-                    .disabled(!FlaskServerManager.shared.isRunning)
-                    .buttonStyle(.bordered)
-                }
-            } header: {
-                Text("Flask Server")
-            } footer: {
-                Text("Automatically start the Flask backend when the app launches.")
-            }
         }
         .formStyle(.grouped)
         .padding()
-        .frame(width: 500, height: 700)
+        .frame(width: 500, height: 600)
         .task {
             await loadGroups()
             await testConnection()
@@ -318,19 +271,6 @@ struct SettingsView: View {
         connectionStatus = "Checking..."
         let connected = await apiClient.healthCheck()
         connectionStatus = connected ? "Connected" : "Disconnected"
-    }
-    
-    private func selectProjectFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.message = "Select the time_tracker project folder"
-        panel.prompt = "Select"
-        
-        if panel.runModal() == .OK, let url = panel.url {
-            settingsManager.projectPath = url.path
-        }
     }
 }
 
