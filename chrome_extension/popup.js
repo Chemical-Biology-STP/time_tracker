@@ -2,19 +2,21 @@
 
 let groups = [];
 let settings = {};
+let calYear, calMonth;
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Load data
   groups = await Storage.getGroups();
   settings = await Storage.getSettings();
   
-  // Initialize UI
+  const now = new Date();
+  calYear = now.getFullYear();
+  calMonth = now.getMonth();
+  
   initializeTabs();
   initializeLogPanel();
   initializeEntriesPanel();
   initializeSummaryPanel();
   
-  // Event listeners
   document.getElementById('submitBtn').addEventListener('click', submitEntry);
   document.getElementById('settingsBtn').addEventListener('click', openSettings);
   document.getElementById('exportBtn').addEventListener('click', exportCSV);
@@ -24,28 +26,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('summaryGroupFilter').addEventListener('change', loadSummary);
   document.getElementById('summaryYearFilter').addEventListener('change', loadSummary);
   document.getElementById('summaryMonthFilter').addEventListener('change', loadSummary);
+  document.getElementById('calPrev').addEventListener('click', () => { calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; } renderCalendar(); });
+  document.getElementById('calNext').addEventListener('click', () => { calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; } renderCalendar(); });
+  document.getElementById('dayDetailClose').addEventListener('click', () => { document.getElementById('dayDetail').style.display = 'none'; });
 });
 
 function initializeTabs() {
   document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
-      // Update tabs
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
-      
-      // Update panels
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
       document.getElementById(tab.dataset.panel).classList.add('active');
       
-      // Refresh data when switching tabs
       if (tab.dataset.panel === 'entries') loadEntries();
       if (tab.dataset.panel === 'summary') loadSummary();
+      if (tab.dataset.panel === 'calendar') renderCalendar();
     });
   });
 }
 
 function initializeLogPanel() {
-  // Populate groups dropdown
   const groupSelect = document.getElementById('group');
   groupSelect.innerHTML = '<option value="">Select a group</option>';
   
@@ -61,7 +62,6 @@ function initializeLogPanel() {
     });
   }
   
-  // Set default times
   const now = new Date();
   const intervalMs = settings.promptIntervalMinutes * 60 * 1000;
   const start = new Date(now.getTime() - intervalMs);
@@ -72,7 +72,6 @@ function initializeLogPanel() {
 }
 
 function initializeEntriesPanel() {
-  // Populate filter dropdown
   const filter = document.getElementById('entriesGroupFilter');
   filter.innerHTML = '<option value="">All Groups</option>';
   groups.forEach(g => {
@@ -81,13 +80,11 @@ function initializeEntriesPanel() {
     option.textContent = g.name;
     filter.appendChild(option);
   });
-  
   populateDateFilters('entries');
   loadEntries();
 }
 
 function initializeSummaryPanel() {
-  // Populate filter dropdown
   const filter = document.getElementById('summaryGroupFilter');
   filter.innerHTML = '<option value="">All Groups</option>';
   groups.forEach(g => {
@@ -96,23 +93,15 @@ function initializeSummaryPanel() {
     option.textContent = g.name;
     filter.appendChild(option);
   });
-  
   populateDateFilters('summary');
   loadSummary();
 }
 
 async function populateDateFilters(prefix) {
   const entries = await Storage.getEntries();
-  
-  // Get unique years and months from entries
   const years = new Set();
-  entries.forEach(e => {
-    if (e.date) {
-      years.add(e.date.substring(0, 4));
-    }
-  });
+  entries.forEach(e => { if (e.date) years.add(e.date.substring(0, 4)); });
   
-  // Populate year filter
   const yearFilter = document.getElementById(`${prefix}YearFilter`);
   yearFilter.innerHTML = '<option value="">All Years</option>';
   Array.from(years).sort().reverse().forEach(year => {
@@ -122,54 +111,35 @@ async function populateDateFilters(prefix) {
     yearFilter.appendChild(option);
   });
   
-  // Populate month filter
   const monthFilter = document.getElementById(`${prefix}MonthFilter`);
   monthFilter.innerHTML = '<option value="">All Months</option>';
-  const months = [
-    { value: '01', label: 'January' },
-    { value: '02', label: 'February' },
-    { value: '03', label: 'March' },
-    { value: '04', label: 'April' },
-    { value: '05', label: 'May' },
-    { value: '06', label: 'June' },
-    { value: '07', label: 'July' },
-    { value: '08', label: 'August' },
-    { value: '09', label: 'September' },
-    { value: '10', label: 'October' },
-    { value: '11', label: 'November' },
-    { value: '12', label: 'December' }
-  ];
-  months.forEach(m => {
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  months.forEach((m, i) => {
     const option = document.createElement('option');
-    option.value = m.value;
-    option.textContent = m.label;
+    option.value = String(i + 1).padStart(2, '0');
+    option.textContent = m;
     monthFilter.appendChild(option);
   });
 }
 
-async function loadEntries() {
-  const groupId = document.getElementById('entriesGroupFilter').value;
-  const year = document.getElementById('entriesYearFilter').value;
-  const month = document.getElementById('entriesMonthFilter').value;
+async function getFilteredEntries(prefix) {
+  const groupId = document.getElementById(`${prefix}GroupFilter`).value;
+  const year = document.getElementById(`${prefix}YearFilter`).value;
+  const month = document.getElementById(`${prefix}MonthFilter`).value;
   let entries = await Storage.getEntries();
   
-  if (groupId) {
-    entries = entries.filter(e => e.groupId === parseInt(groupId));
-  }
+  if (groupId) entries = entries.filter(e => e.groupId === parseInt(groupId));
+  if (year) entries = entries.filter(e => e.date && e.date.startsWith(year));
+  if (month) entries = entries.filter(e => e.date && e.date.substring(5, 7) === month);
   
-  if (year) {
-    entries = entries.filter(e => e.date && e.date.startsWith(year));
-  }
-  
-  if (month) {
-    entries = entries.filter(e => e.date && e.date.substring(5, 7) === month);
-  }
-  
-  // Sort by date descending
+  return entries;
+}
+
+async function loadEntries() {
+  let entries = await getFilteredEntries('entries');
   entries.sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
   
   const container = document.getElementById('entriesList');
-  
   if (entries.length === 0) {
     container.innerHTML = '<div class="empty-state">No entries found</div>';
     return;
@@ -184,7 +154,7 @@ async function loadEntries() {
       <div class="entry-item" data-id="${e.id}">
         <div class="entry-header">
           <div class="entry-date">${e.date} • ${group.name}</div>
-          <button class="delete-btn" onclick="deleteEntry(${e.id})" title="Delete entry">×</button>
+          <button class="delete-btn" data-delete-id="${e.id}" title="Delete entry">×</button>
         </div>
         <div class="entry-task">${escapeHtml(e.taskDescription)}</div>
         <div class="entry-meta">
@@ -194,38 +164,323 @@ async function loadEntries() {
       </div>
     `;
   }).join('');
+  
+  // Attach delete handlers
+  container.querySelectorAll('[data-delete-id]').forEach(btn => {
+    btn.addEventListener('click', () => deleteEntry(parseInt(btn.dataset.deleteId)));
+  });
 }
 
 async function loadSummary() {
-  const groupId = document.getElementById('summaryGroupFilter').value;
-  const year = document.getElementById('summaryYearFilter').value;
-  const month = document.getElementById('summaryMonthFilter').value;
-  
-  let entries = await Storage.getEntries();
-  
-  if (groupId) {
-    entries = entries.filter(e => e.groupId === parseInt(groupId));
-  }
-  
-  if (year) {
-    entries = entries.filter(e => e.date && e.date.startsWith(year));
-  }
-  
-  if (month) {
-    entries = entries.filter(e => e.date && e.date.substring(5, 7) === month);
-  }
+  const entries = await getFilteredEntries('summary');
+  const hourlyRate = settings.hourlyRate || 107.93;
   
   const totalHours = entries.reduce((sum, e) => sum + e.totalHours, 0);
-  const totalEntries = entries.length;
+  const dailyHours = {};
+  entries.forEach(e => { dailyHours[e.date] = (dailyHours[e.date] || 0) + e.totalHours; });
+  const daysWorked = Object.keys(dailyHours).length;
+  const avgHours = daysWorked > 0 ? (totalHours / daysWorked) : 0;
   
   document.getElementById('totalHours').textContent = totalHours.toFixed(1);
-  document.getElementById('totalEntries').textContent = totalEntries;
+  document.getElementById('totalPay').textContent = '£' + (totalHours * hourlyRate).toFixed(0);
+  document.getElementById('daysWorked').textContent = daysWorked;
+  document.getElementById('avgHours').textContent = avgHours.toFixed(1);
   
-  // Calculate pay
-  const hourlyRate = settings.hourlyRate || 107.93;
-  const totalPay = totalHours * hourlyRate;
-  document.getElementById('totalPay').textContent = '£' + totalPay.toFixed(2);
+  // Heatmap
+  renderHeatmap(dailyHours);
+  
+  // Weekly chart
+  renderWeeklyChart(entries);
+  
+  // Monthly breakdown
+  renderMonthlyTable(entries, totalHours, hourlyRate);
 }
+
+function renderHeatmap(dailyHours) {
+  const wrap = document.getElementById('heatmapWrap');
+  wrap.innerHTML = '';
+  
+  if (Object.keys(dailyHours).length === 0) {
+    wrap.innerHTML = '<div style="text-align:center;color:#999;font-size:12px;padding:8px;">No data</div>';
+    return;
+  }
+  
+  const today = new Date();
+  const startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - (20 * 7) - startDate.getDay());
+  
+  const maxHours = Math.max(...Object.values(dailyHours), 1);
+  
+  function getColor(hours) {
+    if (!hours || hours === 0) return '#ebedf0';
+    const r = hours / maxHours;
+    if (r <= 0.25) return '#9be9a8';
+    if (r <= 0.5) return '#40c463';
+    if (r <= 0.75) return '#30a14e';
+    return '#216e39';
+  }
+  
+  const grid = document.createElement('div');
+  grid.className = 'heatmap-grid';
+  
+  const d = new Date(startDate);
+  while (d <= today) {
+    const ds = d.toISOString().split('T')[0];
+    const hrs = dailyHours[ds] || 0;
+    const cell = document.createElement('div');
+    cell.className = 'hm-cell';
+    cell.style.background = getColor(hrs);
+    if (hrs > 0) cell.title = `${ds}: ${hrs.toFixed(1)}h`;
+    grid.appendChild(cell);
+    d.setDate(d.getDate() + 1);
+  }
+  
+  wrap.appendChild(grid);
+}
+
+let weeklyChartInstance = null;
+
+function renderWeeklyChart(entries) {
+  const weeklyHours = {};
+  entries.forEach(e => {
+    if (!e.date) return;
+    const d = new Date(e.date + 'T00:00:00');
+    const jan1 = new Date(d.getFullYear(), 0, 1);
+    const weekNum = Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7);
+    const key = `${d.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+    weeklyHours[key] = (weeklyHours[key] || 0) + e.totalHours;
+  });
+  
+  const labels = Object.keys(weeklyHours).sort();
+  const data = labels.map(k => weeklyHours[k]);
+  const sliceStart = Math.max(0, labels.length - 12);
+  
+  const canvas = document.getElementById('weeklyChart');
+  
+  if (weeklyChartInstance) {
+    weeklyChartInstance.destroy();
+    weeklyChartInstance = null;
+  }
+  
+  if (labels.length === 0) return;
+  
+  // Load Chart.js dynamically if not loaded
+  if (typeof Chart === 'undefined') {
+    const script = document.createElement('script');
+    script.src = 'chart.min.js';
+    script.onload = () => createWeeklyChart(canvas, labels.slice(sliceStart), data.slice(sliceStart));
+    document.head.appendChild(script);
+  } else {
+    createWeeklyChart(canvas, labels.slice(sliceStart), data.slice(sliceStart));
+  }
+}
+
+function createWeeklyChart(canvas, labels, data) {
+  weeklyChartInstance = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Hours',
+        data: data,
+        backgroundColor: '#0078d4',
+        borderRadius: 3,
+        maxBarThickness: 30
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ctx.parsed.y.toFixed(1) + ' hours'
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          grid: { color: '#f0f0f0' },
+          ticks: { callback: v => v + 'h', font: { size: 10 } }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 9 } }
+        }
+      }
+    }
+  });
+}
+
+function renderMonthlyTable(entries, totalHours, hourlyRate) {
+  const monthly = {};
+  entries.forEach(e => {
+    if (!e.date) return;
+    const key = e.date.substring(0, 7);
+    if (!monthly[key]) monthly[key] = { hours: 0, entries: 0 };
+    monthly[key].hours += e.totalHours;
+    monthly[key].entries++;
+  });
+  
+  const sorted = Object.entries(monthly).sort((a, b) => b[0].localeCompare(a[0]));
+  const container = document.getElementById('monthlyTable');
+  
+  if (sorted.length === 0) {
+    container.innerHTML = '<div style="text-align:center;color:#999;font-size:12px;padding:8px;">No data</div>';
+    return;
+  }
+  
+  let html = `<table class="monthly-table"><thead><tr>
+    <th>Month</th><th>Entries</th><th>Hours</th><th>Pay</th><th></th>
+  </tr></thead><tbody>`;
+  
+  sorted.forEach(([month, data]) => {
+    const pct = totalHours > 0 ? (data.hours / totalHours * 100) : 0;
+    html += `<tr>
+      <td>${month}</td>
+      <td>${data.entries}</td>
+      <td>${data.hours.toFixed(1)}</td>
+      <td>£${(data.hours * hourlyRate).toFixed(0)}</td>
+      <td><div class="bar-cell"><div class="bar-fill" style="width:${pct}%"></div></div></td>
+    </tr>`;
+  });
+  
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+// ── Calendar ──
+
+async function renderCalendar() {
+  const entries = await Storage.getEntries();
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  
+  document.getElementById('calTitle').textContent = `${monthNames[calMonth]} ${calYear}`;
+  
+  // Filter entries for this month
+  const prefix = `${calYear}-${String(calMonth + 1).padStart(2, '0')}`;
+  const monthEntries = entries.filter(e => e.date && e.date.startsWith(prefix));
+  
+  // Group by day
+  const byDay = {};
+  monthEntries.forEach(e => {
+    const day = parseInt(e.date.substring(8, 10));
+    if (!byDay[day]) byDay[day] = [];
+    byDay[day].push(e);
+  });
+  
+  // Build calendar grid
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const startDay = firstDay === 0 ? 6 : firstDay - 1; // Monday start
+  
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === calYear && today.getMonth() === calMonth;
+  
+  const groupMap = {};
+  groups.forEach(g => groupMap[g.id] = g);
+  
+  let html = '<div class="cal-weekdays">';
+  ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(d => {
+    html += `<div class="cal-wd">${d}</div>`;
+  });
+  html += '</div>';
+  
+  let dayNum = 1;
+  let started = false;
+  
+  for (let week = 0; week < 6; week++) {
+    if (dayNum > daysInMonth) break;
+    html += '<div class="cal-week">';
+    
+    for (let dow = 0; dow < 7; dow++) {
+      if (!started && dow < startDay) {
+        html += '<div class="cal-cell empty"></div>';
+        continue;
+      }
+      started = true;
+      
+      if (dayNum > daysInMonth) {
+        html += '<div class="cal-cell empty"></div>';
+        continue;
+      }
+      
+      const dayEntries = byDay[dayNum] || [];
+      const totalHrs = dayEntries.reduce((s, e) => s + e.totalHours, 0);
+      const hasData = dayEntries.length > 0;
+      const isToday = isCurrentMonth && dayNum === today.getDate();
+      
+      let cls = 'cal-cell';
+      if (hasData) cls += ' has-data';
+      if (isToday) cls += ' is-today';
+      
+      html += `<div class="${cls}" ${hasData ? `data-cal-day="${dayNum}"` : ''}>`;
+      html += `<span class="day-num">${dayNum}</span>`;
+      if (totalHrs > 0) html += `<span class="day-hrs">${totalHrs.toFixed(1)}h</span>`;
+      if (dayEntries.length > 0) {
+        html += `<div class="day-task">${escapeHtml(dayEntries[0].taskDescription.substring(0, 25))}</div>`;
+        if (dayEntries.length > 1) {
+          html += `<div class="day-task" style="color:#999;">+${dayEntries.length - 1} more</div>`;
+        }
+      }
+      html += '</div>';
+      dayNum++;
+    }
+    html += '</div>';
+  }
+  
+  document.getElementById('calGrid').innerHTML = html;
+  document.getElementById('dayDetail').style.display = 'none';
+  
+  // Attach day click handlers
+  document.querySelectorAll('[data-cal-day]').forEach(cell => {
+    cell.addEventListener('click', () => showDayDetail(parseInt(cell.dataset.calDay)));
+  });
+  
+  // Store entries for detail view
+  window._calByDay = byDay;
+  window._calGroupMap = groupMap;
+}
+
+function showDayDetail(day) {
+  const entries = window._calByDay[day] || [];
+  const groupMap = window._calGroupMap || {};
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  
+  if (entries.length === 0) return;
+  
+  document.getElementById('dayDetailTitle').textContent = `${day} ${monthNames[calMonth]} ${calYear}`;
+  
+  let html = '';
+  let totalHrs = 0;
+  entries.forEach(e => {
+    totalHrs += e.totalHours;
+    const group = groupMap[e.groupId] || { name: 'Unknown' };
+    html += `<div class="day-detail-entry">
+      <div class="day-detail-task">${escapeHtml(e.taskDescription)}</div>
+      <div class="day-detail-meta">
+        <span>${group.name}</span>
+        <span>${e.startTime} – ${e.endTime}</span>
+        <span class="day-detail-hrs">${e.totalHours.toFixed(1)}h</span>
+      </div>
+    </div>`;
+  });
+  
+  html += `<div class="day-detail-entry" style="background:#f8f9fa;">
+    <div class="day-detail-meta">
+      <span style="font-weight:600;color:#333;">Total</span>
+      <span></span>
+      <span class="day-detail-hrs">${totalHrs.toFixed(1)}h</span>
+    </div>
+  </div>`;
+  
+  document.getElementById('dayDetailContent').innerHTML = html;
+  document.getElementById('dayDetail').style.display = 'block';
+}
+
+// ── Shared functions ──
 
 async function submitEntry() {
   const task = document.getElementById('task').value.trim();
@@ -234,47 +489,20 @@ async function submitEntry() {
   const startTime = document.getElementById('startTime').value;
   const endTime = document.getElementById('endTime').value;
   
-  // Validation
-  if (!task) {
-    showMessage('Please enter a task description', 'error');
-    return;
-  }
+  if (!task) { showMessage('Please enter a task description', 'error'); return; }
+  if (!groupId) { showMessage('Please select a research group', 'error'); return; }
+  if (!entryDate) { showMessage('Please select a date', 'error'); return; }
+  if (!startTime || !endTime) { showMessage('Please enter start and end times', 'error'); return; }
   
-  if (!groupId) {
-    showMessage('Please select a research group', 'error');
-    return;
-  }
-  
-  if (!entryDate) {
-    showMessage('Please select a date', 'error');
-    return;
-  }
-  
-  if (!startTime || !endTime) {
-    showMessage('Please enter start and end times', 'error');
-    return;
-  }
-  
-  // Disable button
   const btn = document.getElementById('submitBtn');
   btn.disabled = true;
   btn.textContent = 'Saving...';
   
   try {
-    const entry = await Storage.addEntry(
-      parseInt(groupId),
-      task,
-      entryDate,
-      startTime,
-      endTime
-    );
-    
+    const entry = await Storage.addEntry(parseInt(groupId), task, entryDate, startTime, endTime);
     showMessage(`Logged ${entry.totalHours} hours`, 'success');
-    
-    // Clear form
     document.getElementById('task').value = '';
     initializeLogPanel();
-    
   } catch (error) {
     showMessage('Failed to save: ' + error.message, 'error');
   } finally {
@@ -286,37 +514,26 @@ async function submitEntry() {
 async function exportCSV() {
   const hourlyRate = settings.hourlyRate || 107.93;
   const csv = await Storage.exportCSV(hourlyRate);
-  
-  // Add UTF-8 BOM for Excel compatibility
   const BOM = '\uFEFF';
   const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
-  
   const a = document.createElement('a');
   a.href = url;
   a.download = `time-tracker-${new Date().toISOString().split('T')[0]}.csv`;
   a.click();
-  
   URL.revokeObjectURL(url);
 }
 
-function openSettings() {
-  chrome.runtime.openOptionsPage();
-}
+function openSettings() { chrome.runtime.openOptionsPage(); }
 
 function showMessage(text, type) {
   const el = document.getElementById('logMessage');
   el.textContent = text;
   el.className = 'message ' + type;
-  
-  if (type === 'success') {
-    setTimeout(() => el.className = 'message', 3000);
-  }
+  if (type === 'success') setTimeout(() => el.className = 'message', 3000);
 }
 
-function formatTime(date) {
-  return date.toTimeString().slice(0, 5);
-}
+function formatTime(date) { return date.toTimeString().slice(0, 5); }
 
 function escapeHtml(text) {
   const div = document.createElement('div');
@@ -325,10 +542,7 @@ function escapeHtml(text) {
 }
 
 async function deleteEntry(entryId) {
-  if (!confirm('Delete this entry?')) {
-    return;
-  }
-  
+  if (!confirm('Delete this entry?')) return;
   try {
     await Storage.deleteEntry(entryId);
     loadEntries();

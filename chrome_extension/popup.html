@@ -6,7 +6,7 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     
     body {
-      width: 450px;
+      width: 480px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       font-size: 14px;
       background: #fff;
@@ -19,11 +19,12 @@
     
     .tab {
       flex: 1;
-      padding: 12px;
+      padding: 12px 8px;
       text-align: center;
       cursor: pointer;
       border-bottom: 2px solid transparent;
       color: #666;
+      font-size: 13px;
     }
     
     .tab.active {
@@ -203,25 +204,6 @@
       color: #888;
     }
     
-    /* Summary */
-    .summary-card {
-      background: #f8f9fa;
-      padding: 16px;
-      border-radius: 8px;
-      margin-bottom: 16px;
-    }
-    
-    .summary-value {
-      font-size: 32px;
-      font-weight: 600;
-      color: #0078d4;
-    }
-    
-    .summary-label {
-      font-size: 12px;
-      color: #666;
-    }
-    
     .filter-row {
       display: flex;
       gap: 8px;
@@ -231,12 +213,255 @@
     .filter-row select {
       flex: 1;
     }
+
+    /* Summary stat cards */
+    .stat-cards {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .stat-card {
+      background: #f8f9fa;
+      border-radius: 6px;
+      padding: 10px 8px;
+      text-align: center;
+      border: 1px solid #eee;
+    }
+    .stat-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: #2c3e50;
+      line-height: 1.2;
+    }
+    .stat-label {
+      font-size: 10px;
+      color: #888;
+      margin-top: 2px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    /* Heatmap */
+    .section-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      margin-top: 12px;
+    }
+    .heatmap-wrap {
+      overflow-x: auto;
+      padding: 4px 0;
+    }
+    .heatmap-grid {
+      display: inline-grid;
+      grid-template-rows: repeat(7, 11px);
+      grid-auto-flow: column;
+      gap: 2px;
+    }
+    .hm-cell {
+      width: 11px;
+      height: 11px;
+      border-radius: 2px;
+      background: #ebedf0;
+    }
+    .heatmap-legend {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      margin-top: 6px;
+      justify-content: flex-end;
+    }
+    .heatmap-legend .lbl { font-size: 10px; color: #999; }
+    .heatmap-legend .lc {
+      width: 11px; height: 11px;
+      border-radius: 2px; display: inline-block;
+    }
+
+    /* Weekly chart */
+    .chart-wrap {
+      background: #f8f9fa;
+      border-radius: 6px;
+      padding: 12px;
+      border: 1px solid #eee;
+    }
+
+    /* Monthly breakdown */
+    .monthly-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .monthly-table th {
+      text-align: left;
+      font-size: 10px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      padding: 6px 8px;
+      border-bottom: 2px solid #eee;
+    }
+    .monthly-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .monthly-table th:last-child { width: 25%; }
+    .bar-cell {
+      background: #f0f0f0;
+      border-radius: 3px;
+      height: 6px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      background: #0078d4;
+      border-radius: 3px;
+      min-width: 2px;
+    }
+
+    /* Calendar */
+    .cal-nav {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+    .cal-nav-title {
+      font-size: 15px;
+      font-weight: 600;
+      min-width: 140px;
+      text-align: center;
+    }
+    .cal-nav-btn {
+      background: #f0f0f0;
+      border: none;
+      width: 30px;
+      height: 30px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .cal-nav-btn:hover { background: #e0e0e0; }
+    .cal-grid {
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .cal-weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      background: #f8f9fa;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .cal-wd {
+      padding: 6px 4px;
+      text-align: center;
+      font-size: 10px;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+    }
+    .cal-week {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+    }
+    .cal-week:not(:last-child) {
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .cal-cell {
+      height: 56px;
+      padding: 4px;
+      border-right: 1px solid #f0f0f0;
+      overflow: hidden;
+      font-size: 11px;
+      transition: background 0.1s;
+    }
+    .cal-cell:last-child { border-right: none; }
+    .cal-cell.empty { background: #fafafa; }
+    .cal-cell.has-data { cursor: pointer; }
+    .cal-cell.has-data:hover { background: #f0f7ff; }
+    .cal-cell.is-today { background: #fffbeb; }
+    .cal-cell .day-num {
+      font-weight: 600;
+      font-size: 11px;
+      color: #444;
+    }
+    .cal-cell.is-today .day-num {
+      background: #0078d4;
+      color: white;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+    }
+    .cal-cell .day-hrs {
+      font-size: 10px;
+      font-weight: 600;
+      color: #0078d4;
+      float: right;
+    }
+    .cal-cell .day-task {
+      font-size: 10px;
+      color: #666;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    /* Day detail */
+    .day-detail {
+      margin-top: 12px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      overflow: hidden;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .day-detail-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e0e0e0;
+      position: sticky;
+      top: 0;
+    }
+    .day-detail-header h3 { font-size: 13px; color: #333; }
+    .day-detail-close {
+      background: none; border: none;
+      font-size: 18px; color: #999;
+      cursor: pointer; padding: 0 4px;
+    }
+    .day-detail-close:hover { color: #333; }
+    .day-detail-entry {
+      padding: 8px 12px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .day-detail-entry:last-child { border-bottom: none; }
+    .day-detail-task { font-size: 13px; color: #333; margin-bottom: 2px; }
+    .day-detail-meta {
+      font-size: 11px; color: #888;
+      display: flex; gap: 10px;
+    }
+    .day-detail-hrs { font-weight: 600; color: #0078d4; }
   </style>
 </head>
 <body>
   <div class="tabs">
     <div class="tab active" data-panel="log">Log Time</div>
     <div class="tab" data-panel="entries">Entries</div>
+    <div class="tab" data-panel="calendar">Calendar</div>
     <div class="tab" data-panel="summary">Summary</div>
   </div>
   
@@ -297,6 +522,23 @@
       <div class="empty-state">No entries yet</div>
     </div>
   </div>
+
+  <!-- Calendar Panel -->
+  <div class="panel" id="calendar">
+    <div class="cal-nav">
+      <button class="cal-nav-btn" id="calPrev">‹</button>
+      <div class="cal-nav-title" id="calTitle"></div>
+      <button class="cal-nav-btn" id="calNext">›</button>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="day-detail" id="dayDetail" style="display:none;">
+      <div class="day-detail-header">
+        <h3 id="dayDetailTitle"></h3>
+        <button class="day-detail-close" id="dayDetailClose">×</button>
+      </div>
+      <div id="dayDetailContent"></div>
+    </div>
+  </div>
   
   <!-- Summary Panel -->
   <div class="panel" id="summary">
@@ -312,20 +554,44 @@
       </select>
     </div>
     
-    <div class="summary-card">
-      <div class="summary-value" id="totalHours">0</div>
-      <div class="summary-label">Total Hours</div>
+    <div class="stat-cards">
+      <div class="stat-card">
+        <div class="stat-value" id="totalHours">0</div>
+        <div class="stat-label">Hours</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="totalPay">£0</div>
+        <div class="stat-label">Pay</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="daysWorked">0</div>
+        <div class="stat-label">Days</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="avgHours">0</div>
+        <div class="stat-label">Avg/Day</div>
+      </div>
     </div>
-    
-    <div class="summary-card">
-      <div class="summary-value" id="totalPay">$0</div>
-      <div class="summary-label">Total Pay</div>
+
+    <div class="section-title">Activity</div>
+    <div class="heatmap-wrap" id="heatmapWrap"></div>
+    <div class="heatmap-legend">
+      <span class="lbl">Less</span>
+      <span class="lc" style="background:#ebedf0;"></span>
+      <span class="lc" style="background:#9be9a8;"></span>
+      <span class="lc" style="background:#40c463;"></span>
+      <span class="lc" style="background:#30a14e;"></span>
+      <span class="lc" style="background:#216e39;"></span>
+      <span class="lbl">More</span>
     </div>
-    
-    <div class="summary-card">
-      <div class="summary-value" id="totalEntries">0</div>
-      <div class="summary-label">Total Entries</div>
+
+    <div class="section-title" style="margin-top:14px;">Weekly Hours</div>
+    <div class="chart-wrap">
+      <canvas id="weeklyChart" height="120"></canvas>
     </div>
+
+    <div class="section-title" style="margin-top:14px;">Monthly Breakdown</div>
+    <div id="monthlyTable"></div>
   </div>
   
   <script src="storage.js"></script>

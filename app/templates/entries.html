@@ -92,7 +92,8 @@
 
 <p style="margin-top: 20px;">
     <a href="{{ url_for('main.groups') }}">← Back to Groups</a> |
-    <a href="{{ url_for('main.summary', group_id=group.id) }}">View Summary →</a>
+    <a href="{{ url_for('main.calendar_view', group_id=group.id) }}">Calendar</a> |
+    <a href="{{ url_for('main.summary', group_id=group.id) }}">Summary →</a>
 </p>
 
 <script>

@@ -146,19 +146,129 @@ def entries(group_id):
 
 @bp.route('/groups/<int:group_id>/summary')
 def summary(group_id):
-    """Display summary for a research group."""
+    """Display summary dashboard for a research group."""
     group = ResearchGroup.query.get_or_404(group_id)
-    entries = TimeEntry.query.filter_by(research_group_id=group_id).order_by(TimeEntry.date.desc()).all()
+    entries = TimeEntry.query.filter_by(research_group_id=group_id).order_by(TimeEntry.date.asc()).all()
 
     total_hours = group.get_total_hours()
     total_pay = group.get_total_pay()
+    
+    # Daily hours for heatmap and charts
+    daily_hours = {}
+    for entry in entries:
+        date_str = entry.date.strftime('%Y-%m-%d')
+        daily_hours[date_str] = daily_hours.get(date_str, 0) + entry.total_hours
+    
+    # Weekly hours (ISO week)
+    weekly_hours = {}
+    for entry in entries:
+        iso = entry.date.isocalendar()
+        week_key = f"{iso[0]}-W{iso[1]:02d}"
+        weekly_hours[week_key] = weekly_hours.get(week_key, 0) + entry.total_hours
+    
+    # Monthly breakdown
+    monthly_data = {}
+    for entry in entries:
+        month_key = entry.date.strftime('%Y-%m')
+        if month_key not in monthly_data:
+            monthly_data[month_key] = {'hours': 0, 'entries': 0}
+        monthly_data[month_key]['hours'] += entry.total_hours
+        monthly_data[month_key]['entries'] += 1
+    
+    # Stats
+    num_entries = len(entries)
+    days_worked = len(daily_hours)
+    avg_hours_per_day = round(total_hours / days_worked, 2) if days_worked > 0 else 0
 
     return render_template(
         'summary.html',
         group=group,
         entries=entries,
         total_hours=total_hours,
-        total_pay=total_pay
+        total_pay=total_pay,
+        daily_hours=daily_hours,
+        weekly_hours=weekly_hours,
+        monthly_data=monthly_data,
+        num_entries=num_entries,
+        days_worked=days_worked,
+        avg_hours_per_day=avg_hours_per_day
+    )
+
+
+@bp.route('/groups/<int:group_id>/calendar')
+def calendar_view(group_id):
+    """Display calendar view of entries for a research group."""
+    from calendar import monthrange, monthcalendar
+    
+    group = ResearchGroup.query.get_or_404(group_id)
+    
+    # Get year/month from query params, default to current
+    now = datetime.now()
+    year = request.args.get('year', now.year, type=int)
+    month = request.args.get('month', now.month, type=int)
+    
+    # Clamp values
+    if month < 1:
+        month = 12
+        year -= 1
+    elif month > 12:
+        month = 1
+        year += 1
+    
+    # Get entries for this month
+    start_date = datetime(year, month, 1).date()
+    _, last_day = monthrange(year, month)
+    end_date = datetime(year, month, last_day).date()
+    
+    entries = TimeEntry.query.filter_by(research_group_id=group_id).filter(
+        TimeEntry.date >= start_date,
+        TimeEntry.date <= end_date
+    ).order_by(TimeEntry.date.asc()).all()
+    
+    # Group entries by day
+    entries_by_day = {}
+    hours_by_day = {}
+    for entry in entries:
+        day = entry.date.day
+        if day not in entries_by_day:
+            entries_by_day[day] = []
+            hours_by_day[day] = 0
+        entries_by_day[day].append(entry)
+        hours_by_day[day] += entry.total_hours
+    
+    # Get calendar weeks
+    weeks = monthcalendar(year, month)
+    
+    # Month name
+    month_name = datetime(year, month, 1).strftime('%B %Y')
+    
+    # Prev/next month
+    prev_month = month - 1
+    prev_year = year
+    if prev_month < 1:
+        prev_month = 12
+        prev_year -= 1
+    
+    next_month = month + 1
+    next_year = year
+    if next_month > 12:
+        next_month = 1
+        next_year += 1
+    
+    return render_template(
+        'calendar.html',
+        group=group,
+        weeks=weeks,
+        entries_by_day=entries_by_day,
+        hours_by_day=hours_by_day,
+        month_name=month_name,
+        year=year,
+        month=month,
+        prev_year=prev_year,
+        prev_month=prev_month,
+        next_year=next_year,
+        next_month=next_month,
+        today=now.day if year == now.year and month == now.month else None
     )
 
 
@@ -238,6 +348,150 @@ def export_entries(group_id):
     return Response(
         csv_content,
         mimetype='text/csv; charset=utf-8',
+        headers={'Content-Disposition': f'attachment; filename={filename}'}
+    )
+
+
+@bp.route('/groups/<int:group_id>/export-excel')
+def export_excel(group_id):
+    """Export entries to Excel file, optionally with monthly sheets for a year."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from calendar import monthrange, month_name as cal_month_name
+    
+    group = ResearchGroup.query.get_or_404(group_id)
+    hourly_rate = request.args.get('rate', 107.93, type=float)
+    year_filter = request.args.get('year', '', type=str)
+    month_filter = request.args.get('month', '')
+    
+    # Parse year safely
+    try:
+        year_filter = int(year_filter) if year_filter else None
+    except (ValueError, TypeError):
+        year_filter = None
+    
+    wb = Workbook()
+    
+    headers = ['Date', 'Group', 'Project', 'Manager', 'Task', 'Start', 'End', 'Hours', 'Amount (£)']
+    header_font = Font(bold=True, size=11)
+    header_fill = PatternFill(start_color='F2F2F2', end_color='F2F2F2', fill_type='solid')
+    total_font = Font(bold=True, size=11)
+    currency_fmt = '£#,##0.00'
+    thin_border = Border(bottom=Side(style='thin', color='DDDDDD'))
+    
+    def write_entries_to_sheet(ws, entries, sheet_title=None):
+        """Write entries to a worksheet with formatting."""
+        if sheet_title:
+            ws.title = sheet_title
+        
+        # Headers
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='left')
+        
+        # Data rows
+        for row_idx, entry in enumerate(entries, 2):
+            time_blocks = entry.get_sorted_time_blocks()
+            start_time = time_blocks[0].start_time.strftime('%H:%M') if time_blocks else ''
+            end_time = time_blocks[-1].end_time.strftime('%H:%M') if time_blocks else ''
+            amount = entry.total_hours * hourly_rate
+            
+            ws.cell(row=row_idx, column=1, value=entry.date.strftime('%Y-%m-%d'))
+            ws.cell(row=row_idx, column=2, value=group.name)
+            ws.cell(row=row_idx, column=3, value=group.project_name)
+            ws.cell(row=row_idx, column=4, value=group.manager_name)
+            ws.cell(row=row_idx, column=5, value=entry.task_description)
+            ws.cell(row=row_idx, column=6, value=start_time)
+            ws.cell(row=row_idx, column=7, value=end_time)
+            ws.cell(row=row_idx, column=8, value=round(entry.total_hours, 2))
+            cell = ws.cell(row=row_idx, column=9, value=round(amount, 2))
+            cell.number_format = currency_fmt
+            
+            for col in range(1, 10):
+                ws.cell(row=row_idx, column=col).border = thin_border
+        
+        # Totals row
+        if entries:
+            total_row = len(entries) + 3
+            total_hours = sum(e.total_hours for e in entries)
+            total_amount = total_hours * hourly_rate
+            
+            ws.cell(row=total_row, column=7, value='Total').font = total_font
+            ws.cell(row=total_row, column=8, value=round(total_hours, 2)).font = total_font
+            cell = ws.cell(row=total_row, column=9, value=round(total_amount, 2))
+            cell.font = total_font
+            cell.number_format = currency_fmt
+        
+        # Auto-width columns
+        for col in range(1, 10):
+            max_len = len(headers[col - 1])
+            for row in range(2, min(len(entries) + 2, 50)):
+                val = ws.cell(row=row, column=col).value
+                if val:
+                    max_len = max(max_len, len(str(val)))
+            ws.column_dimensions[chr(64 + col)].width = min(max_len + 3, 40)
+    
+    if year_filter:
+        # Yearly export: one sheet per month
+        wb.remove(wb.active)
+        
+        for m in range(1, 13):
+            start_date = datetime(year_filter, m, 1).date()
+            _, last_day = monthrange(year_filter, m)
+            end_date = datetime(year_filter, m, last_day).date()
+            
+            month_entries = TimeEntry.query.filter_by(research_group_id=group_id).filter(
+                TimeEntry.date >= start_date,
+                TimeEntry.date <= end_date
+            ).order_by(TimeEntry.date.asc()).all()
+            
+            if month_entries:
+                ws = wb.create_sheet()
+                write_entries_to_sheet(ws, month_entries, cal_month_name[m])
+        
+        # If no entries at all, add an empty sheet
+        if len(wb.sheetnames) == 0:
+            ws = wb.create_sheet('No Data')
+            ws.cell(row=1, column=1, value='No entries found for this year.')
+        
+        filename = f"{group.name.replace(' ', '_')}_{year_filter}.xlsx"
+    
+    elif month_filter:
+        # Single month export
+        try:
+            y, m = map(int, month_filter.split('-'))
+            start_date = datetime(y, m, 1).date()
+            _, last_day = monthrange(y, m)
+            end_date = datetime(y, m, last_day).date()
+            
+            entries = TimeEntry.query.filter_by(research_group_id=group_id).filter(
+                TimeEntry.date >= start_date,
+                TimeEntry.date <= end_date
+            ).order_by(TimeEntry.date.asc()).all()
+        except (ValueError, TypeError):
+            entries = []
+        
+        ws = wb.active
+        write_entries_to_sheet(ws, entries, month_filter)
+        filename = f"{group.name.replace(' ', '_')}_{month_filter}.xlsx"
+    
+    else:
+        # All entries
+        entries = TimeEntry.query.filter_by(research_group_id=group_id).order_by(TimeEntry.date.asc()).all()
+        ws = wb.active
+        write_entries_to_sheet(ws, entries, 'All Entries')
+        filename = f"{group.name.replace(' ', '_')}_all.xlsx"
+    
+    # Save to bytes
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return Response(
+        output.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         headers={'Content-Disposition': f'attachment; filename={filename}'}
     )
 
