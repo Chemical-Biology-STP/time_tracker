@@ -172,7 +172,7 @@ async function onEntriesGroupChange() {
 
 async function loadEntries() {
   let entries = await getFilteredEntries('entries');
-  entries.sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+  entries.sort((a, b) => b.date.localeCompare(a.date) || (a.startTime || '').localeCompare(b.startTime || ''));
   
   const container = document.getElementById('entriesList');
   if (entries.length === 0) {
@@ -418,6 +418,11 @@ async function renderCalendar() {
     const day = parseInt(e.date.substring(8, 10));
     if (!byDay[day]) byDay[day] = [];
     byDay[day].push(e);
+  });
+  
+  // Sort entries within each day by start time
+  Object.values(byDay).forEach(dayEntries => {
+    dayEntries.sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
   });
   
   // Build calendar grid

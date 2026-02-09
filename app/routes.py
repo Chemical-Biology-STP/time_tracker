@@ -129,6 +129,12 @@ def overall_calendar():
         entries_by_day[day].append(entry)
         hours_by_day[day] += entry.total_hours
     
+    # Sort entries within each day by first time block start time
+    for day in entries_by_day:
+        entries_by_day[day].sort(
+            key=lambda e: e.get_sorted_time_blocks()[0].start_time if e.get_sorted_time_blocks() else e.id
+        )
+    
     weeks = monthcalendar(year, month)
     month_name = datetime(year, month, 1).strftime('%B %Y')
     
@@ -355,6 +361,12 @@ def calendar_view(group_id):
             hours_by_day[day] = 0
         entries_by_day[day].append(entry)
         hours_by_day[day] += entry.total_hours
+    
+    # Sort entries within each day by first time block start time
+    for day in entries_by_day:
+        entries_by_day[day].sort(
+            key=lambda e: e.get_sorted_time_blocks()[0].start_time if e.get_sorted_time_blocks() else e.id
+        )
     
     # Get calendar weeks
     weeks = monthcalendar(year, month)
