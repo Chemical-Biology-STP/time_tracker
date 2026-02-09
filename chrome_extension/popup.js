@@ -195,7 +195,10 @@ async function loadEntries() {
       <div class="entry-item" data-id="${e.id}">
         <div class="entry-header">
           <div class="entry-date">${e.date} • ${escapeHtml(group.name)}${projectLabel}</div>
-          <button class="delete-btn" data-delete-id="${e.id}" title="Delete entry">×</button>
+          <div>
+            <button class="edit-btn" data-edit-id="${e.id}" title="Edit entry" style="background:none;border:none;color:#0078d4;font-size:14px;cursor:pointer;padding:0 4px;">✏️</button>
+            <button class="delete-btn" data-delete-id="${e.id}" title="Delete entry">×</button>
+          </div>
         </div>
         <div class="entry-task">${escapeHtml(e.taskDescription)}</div>
         <div class="entry-meta">
@@ -209,6 +212,11 @@ async function loadEntries() {
   // Attach delete handlers
   container.querySelectorAll('[data-delete-id]').forEach(btn => {
     btn.addEventListener('click', () => deleteEntry(parseInt(btn.dataset.deleteId)));
+  });
+  
+  // Attach edit handlers
+  container.querySelectorAll('[data-edit-id]').forEach(btn => {
+    btn.addEventListener('click', () => openEditModal(parseInt(btn.dataset.editId)));
   });
 }
 
@@ -628,3 +636,91 @@ async function deleteEntry(entryId) {
     alert('Failed to delete entry: ' + error.message);
   }
 }
+
+// ── Edit Entry Modal ──
+
+let editingEntryId = null;
+
+async function openEditModal(entryId) {
+  const entries = await Storage.getEntries();
+  const entry = entries.find(e => e.id === entryId);
+  if (!entry) return;
+  
+  editingEntryId = entryId;
+  
+  // Populate group picker
+  const groupSelect = document.getElementById('editGroup');
+  groupSelect.innerHTML = '';
+  groups.forEach(g => {
+    const opt = document.createElement('option');
+    opt.value = g.id;
+    opt.textContent = g.name;
+    if (g.id === entry.groupId) opt.selected = true;
+    groupSelect.appendChild(opt);
+  });
+  
+  // Load projects for current group
+  await loadEditProjects(entry.groupId, entry.projectId);
+  
+  // Populate fields
+  document.getElementById('editTask').value = entry.taskDescription;
+  document.getElementById('editDate').value = entry.date;
+  document.getElementById('editStart').value = entry.startTime;
+  document.getElementById('editEnd').value = entry.endTime;
+  
+  document.getElementById('editModal').style.display = 'block';
+}
+
+async function loadEditProjects(groupId, selectedProjectId) {
+  const projectSelect = document.getElementById('editProject');
+  projectSelect.innerHTML = '<option value="">None</option>';
+  
+  if (groupId) {
+    const projects = await Storage.getProjectsByGroup(parseInt(groupId), true);
+    projects.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name + (p.archived ? ' (archived)' : '');
+      if (p.id === selectedProjectId) opt.selected = true;
+      projectSelect.appendChild(opt);
+    });
+  }
+}
+
+function closeEditModal() {
+  document.getElementById('editModal').style.display = 'none';
+  editingEntryId = null;
+}
+
+async function saveEditEntry() {
+  if (!editingEntryId) return;
+  
+  const updates = {
+    groupId: parseInt(document.getElementById('editGroup').value),
+    projectId: document.getElementById('editProject').value ? parseInt(document.getElementById('editProject').value) : null,
+    taskDescription: document.getElementById('editTask').value.trim(),
+    date: document.getElementById('editDate').value,
+    startTime: document.getElementById('editStart').value,
+    endTime: document.getElementById('editEnd').value
+  };
+  
+  if (!updates.taskDescription) { alert('Task description required'); return; }
+  if (!updates.date || !updates.startTime || !updates.endTime) { alert('Date and times required'); return; }
+  
+  await Storage.updateEntry(editingEntryId, updates);
+  closeEditModal();
+  loadEntries();
+  loadSummary();
+}
+
+// Wire up edit modal buttons on load
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('editCancelBtn').addEventListener('click', closeEditModal);
+  document.getElementById('editSaveBtn').addEventListener('click', saveEditEntry);
+  document.getElementById('editGroup').addEventListener('change', async function() {
+    await loadEditProjects(parseInt(this.value), null);
+  });
+  document.getElementById('editModal').addEventListener('click', function(e) {
+    if (e.target === this) closeEditModal();
+  });
+});

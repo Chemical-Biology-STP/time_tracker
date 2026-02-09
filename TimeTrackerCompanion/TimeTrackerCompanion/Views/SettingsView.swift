@@ -139,6 +139,13 @@ struct SettingsView: View {
                     }
                     .buttonStyle(.bordered)
                 }
+                
+                Button("Open Web App") {
+                    if let url = URL(string: settingsManager.backendURL) {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                .buttonStyle(.bordered)
             } header: {
                 Text("Server")
             } footer: {

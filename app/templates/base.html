@@ -34,6 +34,7 @@
 <body>
     <nav>
         <a href="{{ url_for('main.groups') }}">Research Groups</a>
+        <a href="{{ url_for('main.overall_calendar') }}">Calendar</a>
     </nav>
     <div class="container">
         {% with messages = get_flashed_messages(with_categories=true) %}

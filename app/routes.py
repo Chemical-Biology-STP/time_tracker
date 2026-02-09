@@ -94,6 +94,72 @@ def delete_project(project_id):
     return redirect(url_for('main.groups'))
 
 
+@bp.route('/calendar')
+def overall_calendar():
+    """Display an overall calendar view across all groups."""
+    from calendar import monthrange, monthcalendar
+    
+    now = datetime.now()
+    year = request.args.get('year', now.year, type=int)
+    month = request.args.get('month', now.month, type=int)
+    
+    if month < 1:
+        month = 12
+        year -= 1
+    elif month > 12:
+        month = 1
+        year += 1
+    
+    start_date = datetime(year, month, 1).date()
+    _, last_day = monthrange(year, month)
+    end_date = datetime(year, month, last_day).date()
+    
+    entries = TimeEntry.query.filter(
+        TimeEntry.date >= start_date,
+        TimeEntry.date <= end_date
+    ).order_by(TimeEntry.date.asc()).all()
+    
+    entries_by_day = {}
+    hours_by_day = {}
+    for entry in entries:
+        day = entry.date.day
+        if day not in entries_by_day:
+            entries_by_day[day] = []
+            hours_by_day[day] = 0
+        entries_by_day[day].append(entry)
+        hours_by_day[day] += entry.total_hours
+    
+    weeks = monthcalendar(year, month)
+    month_name = datetime(year, month, 1).strftime('%B %Y')
+    
+    prev_month = month - 1
+    prev_year = year
+    if prev_month < 1:
+        prev_month = 12
+        prev_year -= 1
+    
+    next_month = month + 1
+    next_year = year
+    if next_month > 12:
+        next_month = 1
+        next_year += 1
+    
+    return render_template(
+        'overall_calendar.html',
+        weeks=weeks,
+        entries_by_day=entries_by_day,
+        hours_by_day=hours_by_day,
+        month_name=month_name,
+        year=year,
+        month=month,
+        prev_year=prev_year,
+        prev_month=prev_month,
+        next_year=next_year,
+        next_month=next_month,
+        today=now.day if year == now.year and month == now.month else None
+    )
+
+
 @bp.route('/groups/<int:group_id>/entries', methods=['GET', 'POST'])
 def entries(group_id):
     """List entries for a group and handle entry creation."""
@@ -572,6 +638,8 @@ def edit_entry(entry_id):
     if request.method == 'POST':
         task_description = request.form.get('task_description', '')
         date_str = request.form.get('date', '')
+        new_group_id = request.form.get('research_group_id', type=int)
+        new_project_id = request.form.get('project_id') or None
 
         if not validate_task_description(task_description):
             flash('Task description cannot be empty.', 'error')
@@ -605,6 +673,9 @@ def edit_entry(entry_id):
         entry.task_description = task_description.strip()
         entry.date = entry_date
         entry.total_hours = total_hours
+        if new_group_id:
+            entry.research_group_id = new_group_id
+        entry.project_id = int(new_project_id) if new_project_id else None
 
         # Delete existing time blocks
         TimeBlock.query.filter_by(time_entry_id=entry.id).delete()
@@ -620,6 +691,16 @@ def edit_entry(entry_id):
 
         db.session.commit()
         flash('Time entry updated successfully.', 'success')
-        return redirect(url_for('main.entries', group_id=group.id))
+        return redirect(url_for('main.entries', group_id=entry.research_group_id))
 
-    return render_template('edit_entry.html', entry=entry, group=group)
+    all_groups = ResearchGroup.query.all()
+    # Get projects for the current group (for initial load)
+    projects = Project.query.filter_by(research_group_id=group.id, archived=False).all()
+    # Include the currently assigned project even if archived
+    if entry.project_id and not any(p.id == entry.project_id for p in projects):
+        current_project = db.session.get(Project, entry.project_id)
+        if current_project:
+            projects.append(current_project)
+
+    return render_template('edit_entry.html', entry=entry, group=group,
+                          all_groups=all_groups, projects=projects)

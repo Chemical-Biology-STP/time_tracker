@@ -4,9 +4,23 @@
 
 {% block content %}
 <h1>Edit Time Entry</h1>
-<p>Group: {{ group.name }}</p>
 
 <form method="POST" action="{{ url_for('main.edit_entry', entry_id=entry.id) }}">
+    <label for="research_group_id">Research Group</label>
+    <select id="research_group_id" name="research_group_id" style="margin-bottom: 15px;">
+        {% for g in all_groups %}
+        <option value="{{ g.id }}" {% if g.id == entry.research_group_id %}selected{% endif %}>{{ g.name }}</option>
+        {% endfor %}
+    </select>
+
+    <label for="project_id">Project</label>
+    <select id="project_id" name="project_id" style="margin-bottom: 15px;">
+        <option value="">None</option>
+        {% for p in projects %}
+        <option value="{{ p.id }}" {% if p.id == entry.project_id %}selected{% endif %}>{{ p.name }}{% if p.archived %} (archived){% endif %}</option>
+        {% endfor %}
+    </select>
+
     <label for="date">Date</label>
     <input type="date" id="date" name="date" value="{{ entry.date.strftime('%Y-%m-%d') }}" required>
 
@@ -85,6 +99,32 @@
     container.addEventListener('click', function(e) {
         if (e.target.classList.contains('remove-block-btn')) {
             e.target.closest('.time-block').remove();
+        }
+    });
+
+    // Load projects when group changes
+    const groupSelect = document.getElementById('research_group_id');
+    const projectSelect = document.getElementById('project_id');
+    const currentProjectId = {{ entry.project_id|tojson }};
+
+    groupSelect.addEventListener('change', async function() {
+        const groupId = this.value;
+        projectSelect.innerHTML = '<option value="">None</option>';
+        if (!groupId) return;
+
+        try {
+            const resp = await fetch(`/api/groups/${groupId}/projects?include_archived=true`);
+            if (resp.ok) {
+                const projects = await resp.json();
+                projects.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.id;
+                    opt.textContent = p.name + (p.archived ? ' (archived)' : '');
+                    projectSelect.appendChild(opt);
+                });
+            }
+        } catch (e) {
+            console.error('Failed to load projects:', e);
         }
     });
 })();

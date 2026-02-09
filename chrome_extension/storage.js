@@ -137,6 +137,25 @@ const Storage = {
     await this.saveEntries(filtered);
   },
 
+  // Update an existing entry
+  async updateEntry(entryId, updates) {
+    const entries = await this.getEntries();
+    const entry = entries.find(e => e.id === entryId);
+    if (!entry) return null;
+    
+    Object.assign(entry, updates);
+    
+    // Recalculate hours if times changed
+    if (updates.startTime || updates.endTime) {
+      const [startH, startM] = entry.startTime.split(':').map(Number);
+      const [endH, endM] = entry.endTime.split(':').map(Number);
+      entry.totalHours = Math.round(((endH * 60 + endM) - (startH * 60 + startM)) / 60 * 100) / 100;
+    }
+    
+    await this.saveEntries(entries);
+    return entry;
+  },
+
   // Get entries for a specific group
   async getEntriesByGroup(groupId) {
     const entries = await this.getEntries();
