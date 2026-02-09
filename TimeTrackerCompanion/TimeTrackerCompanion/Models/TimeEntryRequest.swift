@@ -11,6 +11,9 @@ struct TimeEntryRequest: Codable {
     /// ID of the research group to log time against
     let research_group_id: Int
     
+    /// ID of the project (optional)
+    let project_id: Int?
+    
     /// Description of the task being logged
     let task_description: String
     

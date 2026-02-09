@@ -222,6 +222,64 @@
       display: block;
     }
     
+    .projects-list {
+      border: 1px solid #eee;
+      border-radius: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    
+    .project-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      border-bottom: 1px solid #eee;
+    }
+    
+    .project-item:last-child {
+      border-bottom: none;
+    }
+    
+    .project-item.archived {
+      opacity: 0.5;
+    }
+    
+    .project-name {
+      font-weight: 500;
+      flex: 1;
+    }
+    
+    .project-actions {
+      display: flex;
+      gap: 4px;
+    }
+    
+    .archive-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px 8px;
+      font-size: 14px;
+      color: #888;
+    }
+    
+    .archive-btn:hover {
+      background: #f0f0f0;
+      border-radius: 4px;
+    }
+    
+    .new-project-form {
+      display: none;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #eee;
+    }
+    
+    .new-project-form.show {
+      display: block;
+    }
+    
     .saved-message {
       color: #27ae60;
       margin-left: 12px;
@@ -334,6 +392,36 @@
       <div class="button-row">
         <button class="btn-primary" id="saveGroupBtn">Save Group</button>
         <button class="btn-secondary" id="cancelGroupBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+  
+  <div class="section">
+    <h2>Projects</h2>
+    <div class="form-group">
+      <label for="projectGroupFilter">Research Group</label>
+      <select id="projectGroupFilter">
+        <option value="">Select a group</option>
+      </select>
+      <p class="hint">Select a group to manage its projects</p>
+    </div>
+    
+    <div class="projects-list" id="projectsList">
+      <div class="empty-state">Select a group to see projects</div>
+    </div>
+    
+    <div class="button-row" style="margin-top: 12px;">
+      <button class="btn-secondary" id="addProjectBtn" disabled>+ Add Project</button>
+    </div>
+    
+    <div class="new-project-form" id="newProjectForm">
+      <div class="form-group">
+        <label for="newProjectName">Project Name *</label>
+        <input type="text" id="newProjectName" placeholder="e.g., Protein Analysis">
+      </div>
+      <div class="button-row">
+        <button class="btn-primary" id="saveProjectBtn">Save Project</button>
+        <button class="btn-secondary" id="cancelProjectBtn">Cancel</button>
       </div>
     </div>
   </div>

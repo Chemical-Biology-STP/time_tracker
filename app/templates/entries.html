@@ -14,6 +14,14 @@
     <label for="task_description">Task Description</label>
     <textarea id="task_description" name="task_description" rows="3" required></textarea>
 
+    <label for="project_id">Project (optional)</label>
+    <select id="project_id" name="project_id" style="margin-bottom: 15px;">
+        <option value="">None</option>
+        {% for project in projects %}
+        <option value="{{ project.id }}">{{ project.name }}</option>
+        {% endfor %}
+    </select>
+
     <h3>Time Blocks</h3>
     <div id="time-blocks-container">
         <div class="time-block" data-index="0">
@@ -55,6 +63,7 @@
     <thead>
         <tr>
             <th>Date</th>
+            <th>Project</th>
             <th>Task</th>
             <th>Time Blocks</th>
             <th>Total Hours</th>
@@ -65,6 +74,7 @@
         {% for entry in entries %}
         <tr>
             <td>{{ entry.date.strftime('%Y-%m-%d') }}</td>
+            <td>{{ entry.project.name if entry.project else '-' }}</td>
             <td>{{ entry.task_description }}</td>
             <td>
                 {% for block in entry.get_sorted_time_blocks() %}

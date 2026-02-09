@@ -15,6 +15,9 @@ struct SettingsView: View {
     @State private var isLoadingGroups: Bool = false
     @State private var connectionStatus: String = "Checking..."
     @State private var showingNewGroupSheet: Bool = false
+    @State private var showingNewProjectSheet: Bool = false
+    @State private var projectsForSelectedGroup: [Project] = []
+    @State private var selectedGroupForProjects: Int?
     
     // Available prompt intervals in minutes
     private let intervalOptions = [15, 30, 45, 60]
@@ -142,26 +145,19 @@ struct SettingsView: View {
                 Text("URL of your Flask time tracker backend.")
             }
 
-            // Default Research Group Section - Requirements: 4.1
+            // Default Research Group Section
             Section {
                 if isLoadingGroups {
                     HStack {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                        Text("Loading groups...")
-                            .foregroundColor(.secondary)
+                        ProgressView().scaleEffect(0.7)
+                        Text("Loading groups...").foregroundColor(.secondary)
                     }
                 } else if groups.isEmpty {
                     HStack {
-                        Text("No groups available")
-                            .foregroundColor(.secondary)
+                        Text("No groups available").foregroundColor(.secondary)
                         Spacer()
-                        Button("Refresh") {
-                            Task {
-                                await loadGroups()
-                            }
-                        }
-                        .buttonStyle(.bordered)
+                        Button("Refresh") { Task { await loadGroups() } }
+                            .buttonStyle(.bordered)
                     }
                 } else {
                     Picker("Default Group", selection: $settingsManager.defaultGroupId) {
@@ -174,22 +170,16 @@ struct SettingsView: View {
                     ForEach(groups) { group in
                         HStack {
                             VStack(alignment: .leading) {
-                                Text(group.name)
-                                    .font(.body)
+                                Text(group.name).font(.body)
                                 if !group.project_name.isEmpty {
-                                    Text(group.project_name)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                                    Text(group.project_name).font(.caption).foregroundColor(.secondary)
                                 }
                             }
                             Spacer()
                             Button(role: .destructive) {
-                                Task {
-                                    await deleteGroup(group)
-                                }
+                                Task { await deleteGroup(group) }
                             } label: {
-                                Image(systemName: "trash")
-                                    .foregroundColor(.red)
+                                Image(systemName: "trash").foregroundColor(.red)
                             }
                             .buttonStyle(.borderless)
                         }
@@ -198,15 +188,90 @@ struct SettingsView: View {
                 
                 HStack {
                     Spacer()
-                    Button("New Group...") {
-                        showingNewGroupSheet = true
-                    }
-                    .buttonStyle(.bordered)
+                    Button("New Group...") { showingNewGroupSheet = true }
+                        .buttonStyle(.bordered)
                 }
             } header: {
-                Text("Default Research Group")
+                Text("Research Groups")
             } footer: {
                 Text("Pre-selected group when logging time.")
+            }
+            
+            // Projects Section
+            Section {
+                if groups.isEmpty {
+                    Text("Create a research group first").foregroundColor(.secondary)
+                } else {
+                    Picker("Group", selection: $selectedGroupForProjects) {
+                        Text("Select a group").tag(nil as Int?)
+                        ForEach(groups) { group in
+                            Text(group.name).tag(group.id as Int?)
+                        }
+                    }
+                    .onChange(of: selectedGroupForProjects) { newGroupId in
+                        if let gid = newGroupId {
+                            Task { await loadProjects(groupId: gid) }
+                        } else {
+                            projectsForSelectedGroup = []
+                        }
+                    }
+                    
+                    if selectedGroupForProjects != nil {
+                        if projectsForSelectedGroup.isEmpty {
+                            Text("No projects yet").foregroundColor(.secondary)
+                        } else {
+                            ForEach(projectsForSelectedGroup) { project in
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text(project.name).font(.body)
+                                        if project.archived {
+                                            Text("Archived").font(.caption).foregroundColor(.orange)
+                                        }
+                                    }
+                                    Spacer()
+                                    Button {
+                                        Task {
+                                            let _ = try? await apiClient.archiveProject(
+                                                projectId: project.id,
+                                                archived: !project.archived
+                                            )
+                                            if let gid = selectedGroupForProjects {
+                                                await loadProjects(groupId: gid)
+                                            }
+                                        }
+                                    } label: {
+                                        Image(systemName: project.archived ? "arrow.uturn.backward" : "archivebox")
+                                            .foregroundColor(.orange)
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .help(project.archived ? "Unarchive" : "Archive")
+                                    
+                                    Button(role: .destructive) {
+                                        Task {
+                                            try? await apiClient.deleteProject(projectId: project.id)
+                                            if let gid = selectedGroupForProjects {
+                                                await loadProjects(groupId: gid)
+                                            }
+                                        }
+                                    } label: {
+                                        Image(systemName: "trash").foregroundColor(.red)
+                                    }
+                                    .buttonStyle(.borderless)
+                                }
+                            }
+                        }
+                        
+                        HStack {
+                            Spacer()
+                            Button("New Project...") { showingNewProjectSheet = true }
+                                .buttonStyle(.bordered)
+                        }
+                    }
+                }
+            } header: {
+                Text("Projects")
+            } footer: {
+                Text("Organize work under projects within each group.")
             }
             
             // Launch at Login Section - Requirements: 4.1
@@ -222,6 +287,8 @@ struct SettingsView: View {
         .padding()
         .frame(width: 500, height: 600)
         .task {
+            // Migrate existing project_name fields to Project records
+            let _ = try? await apiClient.migrateProjects()
             await loadGroups()
             await testConnection()
         }
@@ -243,16 +310,44 @@ struct SettingsView: View {
                 settingsManager.defaultGroupId = newGroup.id
             }
         }
+        .sheet(isPresented: $showingNewProjectSheet) {
+            if let groupId = selectedGroupForProjects {
+                NewProjectSheet(apiClient: apiClient, groupId: groupId) { _ in
+                    Task { await loadProjects(groupId: groupId) }
+                }
+            }
+        }
     }
     
     private func loadGroups() async {
         isLoadingGroups = true
         do {
             groups = try await apiClient.fetchGroups()
+            // Auto-select group for projects section
+            if selectedGroupForProjects == nil {
+                if let defaultId = settingsManager.defaultGroupId,
+                   groups.contains(where: { $0.id == defaultId }) {
+                    selectedGroupForProjects = defaultId
+                } else if let first = groups.first {
+                    selectedGroupForProjects = first.id
+                }
+            }
+            // Load projects for the selected group
+            if let gid = selectedGroupForProjects {
+                await loadProjects(groupId: gid)
+            }
         } catch {
             groups = []
         }
         isLoadingGroups = false
+    }
+    
+    private func loadProjects(groupId: Int) async {
+        do {
+            projectsForSelectedGroup = try await apiClient.fetchProjects(groupId: groupId, includeArchived: true)
+        } catch {
+            projectsForSelectedGroup = []
+        }
     }
     
     private func deleteGroup(_ group: ResearchGroup) async {
@@ -339,6 +434,70 @@ struct NewGroupSheet: View {
             dismiss()
         } catch {
             errorMessage = "Failed to create group: \(error.localizedDescription)"
+        }
+        
+        isCreating = false
+    }
+}
+
+
+struct NewProjectSheet: View {
+    let apiClient: APIClient
+    let groupId: Int
+    let onCreated: (Project) -> Void
+    
+    @Environment(\.dismiss) private var dismiss
+    
+    @State private var name: String = ""
+    @State private var isCreating: Bool = false
+    @State private var errorMessage: String?
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("New Project")
+                .font(.headline)
+            
+            Form {
+                TextField("Project Name", text: $name)
+            }
+            .formStyle(.grouped)
+            
+            if let error = errorMessage {
+                Text(error)
+                    .foregroundColor(.red)
+                    .font(.caption)
+            }
+            
+            HStack {
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                
+                Spacer()
+                
+                Button("Create") {
+                    Task { await createProject() }
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isCreating)
+            }
+        }
+        .padding()
+        .frame(width: 300, height: 180)
+    }
+    
+    private func createProject() async {
+        isCreating = true
+        errorMessage = nil
+        
+        do {
+            let project = try await apiClient.createProject(
+                groupId: groupId,
+                name: name.trimmingCharacters(in: .whitespaces)
+            )
+            onCreated(project)
+            dismiss()
+        } catch {
+            errorMessage = "Failed to create project: \(error.localizedDescription)"
         }
         
         isCreating = false

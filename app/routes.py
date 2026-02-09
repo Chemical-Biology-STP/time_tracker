@@ -3,7 +3,7 @@ import csv
 import io
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, Response
-from .models import db, ResearchGroup, TimeEntry, TimeBlock
+from .models import db, ResearchGroup, Project, TimeEntry, TimeBlock
 from .utils import (
     validate_group_name,
     validate_task_description,
@@ -97,6 +97,7 @@ def entries(group_id):
         # Create TimeEntry first
         entry = TimeEntry(
             research_group_id=group_id,
+            project_id=request.form.get('project_id') or None,
             date=entry_date,
             task_description=task_description.strip(),
             total_hours=total_hours
@@ -140,8 +141,12 @@ def entries(group_id):
     all_dates = db.session.query(TimeEntry.date).filter_by(research_group_id=group_id).distinct().all()
     available_months = sorted(set(d[0].strftime('%Y-%m') for d in all_dates), reverse=True)
     
+    # Get active projects for this group
+    projects = Project.query.filter_by(research_group_id=group_id, archived=False).all()
+    
     return render_template('entries.html', group=group, entries=all_entries, 
-                          month_filter=month_filter, available_months=available_months)
+                          month_filter=month_filter, available_months=available_months,
+                          projects=projects)
 
 
 @bp.route('/groups/<int:group_id>/summary')
@@ -319,7 +324,7 @@ def export_entries(group_id):
         writer.writerow([
             entry.date.strftime('%Y-%m-%d'),
             group.name,
-            group.project_name,
+            entry.project.name if entry.project else group.project_name,
             group.manager_name,
             entry.task_description,
             start_time,
@@ -400,7 +405,7 @@ def export_excel(group_id):
             
             ws.cell(row=row_idx, column=1, value=entry.date.strftime('%Y-%m-%d'))
             ws.cell(row=row_idx, column=2, value=group.name)
-            ws.cell(row=row_idx, column=3, value=group.project_name)
+            ws.cell(row=row_idx, column=3, value=entry.project.name if entry.project else group.project_name)
             ws.cell(row=row_idx, column=4, value=group.manager_name)
             ws.cell(row=row_idx, column=5, value=entry.task_description)
             ws.cell(row=row_idx, column=6, value=start_time)

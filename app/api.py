@@ -1,7 +1,7 @@
 """REST API blueprint for Time Tracker companion app integration."""
 from datetime import datetime, time
 from flask import Blueprint, jsonify, request
-from .models import db, ResearchGroup, TimeEntry, TimeBlock
+from .models import db, ResearchGroup, Project, TimeEntry, TimeBlock
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -65,6 +65,109 @@ def delete_group(group_id):
     return jsonify({'message': 'Group deleted successfully'}), 200
 
 
+@api_bp.route('/groups/<int:group_id>/projects', methods=['GET'])
+def get_projects(group_id):
+    """Return projects for a group. Use ?include_archived=true to include archived."""
+    group = db.session.get(ResearchGroup, group_id)
+    if not group:
+        return jsonify({'error': 'Research group not found'}), 404
+    
+    include_archived = request.args.get('include_archived', 'false').lower() == 'true'
+    
+    query = Project.query.filter_by(research_group_id=group_id)
+    if not include_archived:
+        query = query.filter_by(archived=False)
+    
+    projects = query.all()
+    return jsonify([{
+        'id': p.id,
+        'name': p.name,
+        'research_group_id': p.research_group_id,
+        'archived': p.archived
+    } for p in projects])
+
+
+@api_bp.route('/groups/<int:group_id>/projects', methods=['POST'])
+def create_project(group_id):
+    """Create a new project under a research group."""
+    group = db.session.get(ResearchGroup, group_id)
+    if not group:
+        return jsonify({'error': 'Research group not found'}), 404
+    
+    data = request.get_json()
+    if not data or not data.get('name'):
+        return jsonify({'error': 'name required'}), 400
+    
+    project = Project(
+        name=data['name'].strip(),
+        research_group_id=group_id
+    )
+    db.session.add(project)
+    db.session.commit()
+    
+    return jsonify({
+        'id': project.id,
+        'name': project.name,
+        'research_group_id': project.research_group_id,
+        'archived': project.archived
+    }), 201
+
+
+@api_bp.route('/projects/<int:project_id>/archive', methods=['POST'])
+def archive_project(project_id):
+    """Archive or unarchive a project."""
+    project = db.session.get(Project, project_id)
+    if not project:
+        return jsonify({'error': 'Project not found'}), 404
+    
+    data = request.get_json() or {}
+    project.archived = data.get('archived', True)
+    db.session.commit()
+    
+    return jsonify({
+        'id': project.id,
+        'name': project.name,
+        'research_group_id': project.research_group_id,
+        'archived': project.archived
+    })
+
+
+@api_bp.route('/projects/<int:project_id>', methods=['DELETE'])
+def delete_project(project_id):
+    """Delete a project."""
+    project = db.session.get(Project, project_id)
+    if not project:
+        return jsonify({'error': 'Project not found'}), 404
+    
+    db.session.delete(project)
+    db.session.commit()
+    
+    return jsonify({'message': 'Project deleted successfully'}), 200
+
+
+@api_bp.route('/migrate-projects', methods=['POST'])
+def migrate_projects():
+    """Migrate existing project_name fields on groups into Project records."""
+    migrated = 0
+    groups = ResearchGroup.query.all()
+    for group in groups:
+        if group.project_name and group.project_name.strip():
+            # Check if a project with this name already exists for this group
+            existing = Project.query.filter_by(
+                research_group_id=group.id,
+                name=group.project_name.strip()
+            ).first()
+            if not existing:
+                project = Project(
+                    name=group.project_name.strip(),
+                    research_group_id=group.id
+                )
+                db.session.add(project)
+                migrated += 1
+    db.session.commit()
+    return jsonify({'migrated': migrated}), 200
+
+
 @api_bp.route('/entries', methods=['POST'])
 def create_entry():
     """Create a new time entry with time block."""
@@ -115,6 +218,7 @@ def create_entry():
     # Create entry
     entry = TimeEntry(
         research_group_id=data['research_group_id'],
+        project_id=data.get('project_id'),
         date=entry_date,
         task_description=data['task_description'].strip(),
         total_hours=total_hours

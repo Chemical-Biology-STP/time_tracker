@@ -14,6 +14,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('exportJsonBtn').addEventListener('click', exportJSON);
   document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
   document.getElementById('clearDataBtn').addEventListener('click', clearAllData);
+  
+  // Project event listeners
+  document.getElementById('projectGroupFilter').addEventListener('change', loadProjects);
+  document.getElementById('addProjectBtn').addEventListener('click', showNewProjectForm);
+  document.getElementById('saveProjectBtn').addEventListener('click', saveNewProject);
+  document.getElementById('cancelProjectBtn').addEventListener('click', hideNewProjectForm);
 });
 
 async function loadSettings() {
@@ -55,6 +61,20 @@ async function loadGroups() {
   
   // Update groups list
   const list = document.getElementById('groupsList');
+  
+  // Update project group filter
+  const projectGroupFilter = document.getElementById('projectGroupFilter');
+  const currentProjectGroup = projectGroupFilter.value;
+  projectGroupFilter.innerHTML = '<option value="">Select a group</option>';
+  groups.forEach(g => {
+    const option = document.createElement('option');
+    option.value = g.id;
+    option.textContent = g.name;
+    projectGroupFilter.appendChild(option);
+  });
+  if (currentProjectGroup) {
+    projectGroupFilter.value = currentProjectGroup;
+  }
   
   if (groups.length === 0) {
     list.innerHTML = '<div class="empty-state">No groups yet. Add one to get started!</div>';
@@ -203,4 +223,86 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+// ── Project Management ──
+
+async function loadProjects() {
+  const groupId = document.getElementById('projectGroupFilter').value;
+  const list = document.getElementById('projectsList');
+  const addBtn = document.getElementById('addProjectBtn');
+  
+  if (!groupId) {
+    list.innerHTML = '<div class="empty-state">Select a group to see projects</div>';
+    addBtn.disabled = true;
+    return;
+  }
+  
+  addBtn.disabled = false;
+  const projects = await Storage.getProjectsByGroup(parseInt(groupId), true);
+  
+  if (projects.length === 0) {
+    list.innerHTML = '<div class="empty-state">No projects yet. Add one to get started!</div>';
+    return;
+  }
+  
+  list.innerHTML = projects.map(p => `
+    <div class="project-item ${p.archived ? 'archived' : ''}">
+      <span class="project-name">${escapeHtml(p.name)}${p.archived ? ' (archived)' : ''}</span>
+      <div class="project-actions">
+        <button class="archive-btn" data-archive-id="${p.id}" data-archived="${p.archived}" title="${p.archived ? 'Unarchive' : 'Archive'}">
+          ${p.archived ? '📂' : '📁'}
+        </button>
+        <button class="delete-btn" data-delete-project-id="${p.id}" title="Delete project">🗑️</button>
+      </div>
+    </div>
+  `).join('');
+  
+  // Archive handlers
+  list.querySelectorAll('[data-archive-id]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = parseInt(btn.dataset.archiveId);
+      const isArchived = btn.dataset.archived === 'true';
+      await Storage.archiveProject(id, !isArchived);
+      await loadProjects();
+    });
+  });
+  
+  // Delete handlers
+  list.querySelectorAll('[data-delete-project-id]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = parseInt(btn.dataset.deleteProjectId);
+      if (!confirm('Delete this project? Entries will keep their data but lose the project link.')) return;
+      await Storage.deleteProject(id);
+      await loadProjects();
+    });
+  });
+}
+
+function showNewProjectForm() {
+  document.getElementById('newProjectForm').classList.add('show');
+  document.getElementById('newProjectName').focus();
+}
+
+function hideNewProjectForm() {
+  document.getElementById('newProjectForm').classList.remove('show');
+  document.getElementById('newProjectName').value = '';
+}
+
+async function saveNewProject() {
+  const name = document.getElementById('newProjectName').value.trim();
+  const groupId = document.getElementById('projectGroupFilter').value;
+  
+  if (!name) {
+    alert('Please enter a project name');
+    return;
+  }
+  if (!groupId) {
+    alert('Please select a group first');
+    return;
+  }
+  
+  await Storage.addProject(parseInt(groupId), name);
+  hideNewProjectForm();
+  await loadProjects();
 }

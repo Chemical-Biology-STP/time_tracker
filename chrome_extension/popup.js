@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('summaryGroupFilter').addEventListener('change', loadSummary);
   document.getElementById('summaryYearFilter').addEventListener('change', loadSummary);
   document.getElementById('summaryMonthFilter').addEventListener('change', loadSummary);
+  document.getElementById('group').addEventListener('change', onGroupChange);
   document.getElementById('calPrev').addEventListener('click', () => { calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; } renderCalendar(); });
   document.getElementById('calNext').addEventListener('click', () => { calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; } renderCalendar(); });
   document.getElementById('dayDetailClose').addEventListener('click', () => { document.getElementById('dayDetail').style.display = 'none'; });
@@ -148,12 +149,18 @@ async function loadEntries() {
   const groupMap = {};
   groups.forEach(g => groupMap[g.id] = g);
   
+  const projects = await Storage.getProjects();
+  const projectMap = {};
+  projects.forEach(p => projectMap[p.id] = p);
+  
   container.innerHTML = entries.slice(0, 50).map(e => {
     const group = groupMap[e.groupId] || { name: 'Unknown' };
+    const project = e.projectId ? projectMap[e.projectId] : null;
+    const projectLabel = project ? ` • ${escapeHtml(project.name)}` : '';
     return `
       <div class="entry-item" data-id="${e.id}">
         <div class="entry-header">
-          <div class="entry-date">${e.date} • ${group.name}</div>
+          <div class="entry-date">${e.date} • ${escapeHtml(group.name)}${projectLabel}</div>
           <button class="delete-btn" data-delete-id="${e.id}" title="Delete entry">×</button>
         </div>
         <div class="entry-task">${escapeHtml(e.taskDescription)}</div>
@@ -444,12 +451,16 @@ async function renderCalendar() {
   window._calGroupMap = groupMap;
 }
 
-function showDayDetail(day) {
+async function showDayDetail(day) {
   const entries = window._calByDay[day] || [];
   const groupMap = window._calGroupMap || {};
   const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   
   if (entries.length === 0) return;
+  
+  const projects = await Storage.getProjects();
+  const projectMap = {};
+  projects.forEach(p => projectMap[p.id] = p);
   
   document.getElementById('dayDetailTitle').textContent = `${day} ${monthNames[calMonth]} ${calYear}`;
   
@@ -458,10 +469,12 @@ function showDayDetail(day) {
   entries.forEach(e => {
     totalHrs += e.totalHours;
     const group = groupMap[e.groupId] || { name: 'Unknown' };
+    const project = e.projectId ? projectMap[e.projectId] : null;
+    const label = project ? `${group.name} • ${project.name}` : group.name;
     html += `<div class="day-detail-entry">
       <div class="day-detail-task">${escapeHtml(e.taskDescription)}</div>
       <div class="day-detail-meta">
-        <span>${group.name}</span>
+        <span>${escapeHtml(label)}</span>
         <span>${e.startTime} – ${e.endTime}</span>
         <span class="day-detail-hrs">${e.totalHours.toFixed(1)}h</span>
       </div>
@@ -482,6 +495,35 @@ function showDayDetail(day) {
 
 // ── Shared functions ──
 
+async function onGroupChange() {
+  const groupId = document.getElementById('group').value;
+  const projectFormGroup = document.getElementById('projectFormGroup');
+  const projectSelect = document.getElementById('project');
+  
+  if (!groupId) {
+    projectFormGroup.style.display = 'none';
+    projectSelect.innerHTML = '<option value="">No project</option>';
+    return;
+  }
+  
+  const projects = await Storage.getProjectsByGroup(parseInt(groupId));
+  
+  if (projects.length === 0) {
+    projectFormGroup.style.display = 'none';
+    projectSelect.innerHTML = '<option value="">No project</option>';
+    return;
+  }
+  
+  projectSelect.innerHTML = '<option value="">No project</option>';
+  projects.forEach(p => {
+    const option = document.createElement('option');
+    option.value = p.id;
+    option.textContent = p.name;
+    projectSelect.appendChild(option);
+  });
+  projectFormGroup.style.display = 'block';
+}
+
 async function submitEntry() {
   const task = document.getElementById('task').value.trim();
   const groupId = document.getElementById('group').value;
@@ -499,7 +541,8 @@ async function submitEntry() {
   btn.textContent = 'Saving...';
   
   try {
-    const entry = await Storage.addEntry(parseInt(groupId), task, entryDate, startTime, endTime);
+    const projectId = document.getElementById('project').value ? parseInt(document.getElementById('project').value) : null;
+    const entry = await Storage.addEntry(parseInt(groupId), task, entryDate, startTime, endTime, projectId);
     showMessage(`Logged ${entry.totalHours} hours`, 'success');
     document.getElementById('task').value = '';
     initializeLogPanel();

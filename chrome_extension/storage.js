@@ -23,7 +23,7 @@ const Storage = {
     return newGroup;
   },
 
-  // Delete a group and its entries
+  // Delete a group and its entries and projects
   async deleteGroup(groupId) {
     const groups = await this.getGroups();
     const filtered = groups.filter(g => g.id !== groupId);
@@ -33,6 +33,64 @@ const Storage = {
     const entries = await this.getEntries();
     const filteredEntries = entries.filter(e => e.groupId !== groupId);
     await this.saveEntries(filteredEntries);
+
+    // Also delete projects for this group
+    const projects = await this.getProjects();
+    const filteredProjects = projects.filter(p => p.groupId !== groupId);
+    await this.saveProjects(filteredProjects);
+  },
+
+  // Get all projects
+  async getProjects() {
+    const data = await chrome.storage.sync.get({ projects: [] });
+    return data.projects;
+  },
+
+  // Save all projects
+  async saveProjects(projects) {
+    await chrome.storage.sync.set({ projects });
+  },
+
+  // Get projects for a specific group (excludes archived by default)
+  async getProjectsByGroup(groupId, includeArchived = false) {
+    const projects = await this.getProjects();
+    return projects.filter(p => p.groupId === groupId && (includeArchived || !p.archived));
+  },
+
+  // Add a new project under a group
+  async addProject(groupId, name) {
+    const projects = await this.getProjects();
+    const id = Date.now();
+    const newProject = { id, groupId, name, archived: false };
+    projects.push(newProject);
+    await this.saveProjects(projects);
+    return newProject;
+  },
+
+  // Archive/unarchive a project
+  async archiveProject(projectId, archived = true) {
+    const projects = await this.getProjects();
+    const project = projects.find(p => p.id === projectId);
+    if (project) {
+      project.archived = archived;
+      await this.saveProjects(projects);
+    }
+    return project;
+  },
+
+  // Delete a project
+  async deleteProject(projectId) {
+    const projects = await this.getProjects();
+    const filtered = projects.filter(p => p.id !== projectId);
+    await this.saveProjects(filtered);
+
+    // Clear projectId from entries that used this project
+    const entries = await this.getEntries();
+    let changed = false;
+    entries.forEach(e => {
+      if (e.projectId === projectId) { e.projectId = null; changed = true; }
+    });
+    if (changed) await this.saveEntries(entries);
   },
 
   // Get all time entries
@@ -47,7 +105,7 @@ const Storage = {
   },
 
   // Add a new time entry
-  async addEntry(groupId, taskDescription, date, startTime, endTime) {
+  async addEntry(groupId, taskDescription, date, startTime, endTime, projectId = null) {
     const entries = await this.getEntries();
     
     // Calculate hours
@@ -59,6 +117,7 @@ const Storage = {
     const newEntry = {
       id,
       groupId,
+      projectId,
       taskDescription,
       date,
       startTime,
@@ -113,11 +172,13 @@ const Storage = {
   async exportData() {
     const groups = await this.getGroups();
     const entries = await this.getEntries();
+    const projects = await this.getProjects();
     const settings = await this.getSettings();
     
     return {
       exportDate: new Date().toISOString(),
       groups,
+      projects,
       entries,
       settings
     };
@@ -127,18 +188,24 @@ const Storage = {
   async exportCSV(hourlyRate = 107.93) {
     const groups = await this.getGroups();
     const entries = await this.getEntries();
+    const projects = await this.getProjects();
     
     const groupMap = {};
     groups.forEach(g => groupMap[g.id] = g);
     
+    const projectMap = {};
+    projects.forEach(p => projectMap[p.id] = p);
+    
     const headers = ['Date', 'Group', 'Project', 'Manager', 'Task', 'Start', 'End', 'Hours', 'Amount (£)'];
     const rows = entries.map(e => {
       const group = groupMap[e.groupId] || { name: 'Unknown', projectName: '', managerName: '' };
+      const project = e.projectId ? projectMap[e.projectId] : null;
+      const projectName = project ? project.name : group.projectName;
       const amount = (e.totalHours * hourlyRate).toFixed(2);
       return [
         e.date,
         group.name,
-        group.projectName,
+        projectName,
         group.managerName,
         `"${e.taskDescription.replace(/"/g, '""')}"`,
         e.startTime,

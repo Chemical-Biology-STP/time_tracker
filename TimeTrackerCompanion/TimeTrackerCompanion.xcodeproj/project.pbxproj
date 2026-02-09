@@ -19,6 +19,7 @@
 		A100000A /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000A /* SettingsManager.swift */; };
 		A100000C /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000E /* NotificationManager.swift */; };
 		A100000D /* FlaskServerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000F /* FlaskServerManager.swift */; };
+		A100000E /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000010 /* Project.swift */; };
 		A100000B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A200000B /* Assets.xcassets */; };
 		B1000001 /* SettingsManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001 /* SettingsManagerTests.swift */; };
 		B1000002 /* APIClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002 /* APIClientTests.swift */; };
@@ -48,6 +49,7 @@
 		A200000A /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
 		A200000E /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		A200000F /* FlaskServerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlaskServerManager.swift; sourceTree = "<group>"; };
+		A2000010 /* Project.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Project.swift; sourceTree = "<group>"; };
 		A200000B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A200000C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A200000D /* TimeTrackerCompanion.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TimeTrackerCompanion.entitlements; sourceTree = "<group>"; };
@@ -112,6 +114,7 @@
 			isa = PBXGroup;
 			children = (
 				A2000002 /* ResearchGroup.swift */,
+				A2000010 /* Project.swift */,
 				A2000003 /* TimeEntryRequest.swift */,
 				A2000004 /* TimeEntryResponse.swift */,
 			);
@@ -261,6 +264,7 @@
 				A100000A /* SettingsManager.swift in Sources */,
 				A100000C /* NotificationManager.swift in Sources */,
 				A100000D /* FlaskServerManager.swift in Sources */,
+				A100000E /* Project.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -2,7 +2,6 @@
 // TimeTrackerCompanion
 //
 // Time logging prompt dialog view
-// Requirements: 2.2, 2.3, 2.4
 
 import SwiftUI
 
@@ -14,21 +13,23 @@ struct PromptView: View {
     
     @State private var taskDescription: String = ""
     @State private var selectedGroupId: Int?
+    @State private var selectedProjectId: Int?
     @State private var groups: [ResearchGroup] = []
+    @State private var projects: [Project] = []
     @State private var isLoading: Bool = false
     @State private var errorMessage: String?
     @State private var isLoadingGroups: Bool = true
+    @State private var isLoadingProjects: Bool = false
     @State private var startTime: Date = Date()
     @State private var endTime: Date = Date()
     @State private var selectedDate: Date = Date()
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Header
             Text("What are you working on?")
                 .font(.headline)
             
-            // Task description text field - Requirements: 2.2
+            // Task description
             VStack(alignment: .leading, spacing: 4) {
                 Text("Task Description")
                     .font(.subheadline)
@@ -38,7 +39,7 @@ struct PromptView: View {
                     .lineLimit(3...5)
             }
             
-            // Research group picker - Requirements: 2.2
+            // Research group picker
             VStack(alignment: .leading, spacing: 4) {
                 Text("Research Group")
                     .font(.subheadline)
@@ -46,14 +47,11 @@ struct PromptView: View {
                 
                 if isLoadingGroups {
                     HStack {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                        Text("Loading groups...")
-                            .foregroundColor(.secondary)
+                        ProgressView().scaleEffect(0.7)
+                        Text("Loading groups...").foregroundColor(.secondary)
                     }
                 } else if groups.isEmpty {
-                    Text("No groups available")
-                        .foregroundColor(.red)
+                    Text("No groups available").foregroundColor(.red)
                 } else {
                     Picker("Select Group", selection: $selectedGroupId) {
                         Text("Select a group").tag(nil as Int?)
@@ -62,6 +60,38 @@ struct PromptView: View {
                         }
                     }
                     .pickerStyle(.menu)
+                    .onChange(of: selectedGroupId) { newGroupId in
+                        selectedProjectId = nil
+                        if let gid = newGroupId {
+                            Task { await loadProjects(groupId: gid) }
+                        } else {
+                            projects = []
+                        }
+                    }
+                }
+            }
+            
+            // Project picker
+            if selectedGroupId != nil {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Project")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    
+                    if isLoadingProjects {
+                        HStack {
+                            ProgressView().scaleEffect(0.7)
+                            Text("Loading projects...").foregroundColor(.secondary)
+                        }
+                    } else {
+                        Picker("Select Project", selection: $selectedProjectId) {
+                            Text("None").tag(nil as Int?)
+                            ForEach(projects) { project in
+                                Text(project.name).tag(project.id as Int?)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
                 }
             }
             
@@ -93,7 +123,6 @@ struct PromptView: View {
                 }
             }
             
-            // Error message display
             if let error = errorMessage {
                 Text(error)
                     .font(.caption)
@@ -102,9 +131,7 @@ struct PromptView: View {
             
             Divider()
             
-            // Action buttons - Requirements: 2.3, 2.4
             HStack {
-                // Cancel button - Requirements: 2.4
                 Button("Cancel") {
                     promptManager.dismissPrompt()
                 }
@@ -112,11 +139,9 @@ struct PromptView: View {
                 
                 Spacer()
                 
-                // Submit button - Requirements: 2.3
                 Button(action: submitEntry) {
                     if isLoading {
-                        ProgressView()
-                            .scaleEffect(0.7)
+                        ProgressView().scaleEffect(0.7)
                     } else {
                         Text("Submit")
                     }
@@ -130,29 +155,23 @@ struct PromptView: View {
         .frame(width: 350)
         .onAppear {
             resetForm()
-            Task {
-                await loadGroups()
-            }
+            Task { await loadGroups() }
         }
         .onChange(of: promptManager.showPrompt) { isShowing in
             if isShowing {
                 resetForm()
-                Task {
-                    await loadGroups()
-                }
+                Task { await loadGroups() }
             }
         }
     }
     
     private func resetForm() {
-        // Reset date and time pickers to current time
         selectedDate = Date()
         endTime = Date()
         startTime = endTime.addingTimeInterval(-TimeInterval(settingsManager.promptIntervalMinutes * 60))
-        // Clear previous task description
         taskDescription = ""
         errorMessage = nil
-        // Restore default group selection
+        selectedProjectId = nil
         if let defaultId = settingsManager.defaultGroupId,
            groups.contains(where: { $0.id == defaultId }) {
             selectedGroupId = defaultId
@@ -168,10 +187,10 @@ struct PromptView: View {
         isLoadingGroups = true
         do {
             groups = try await apiClient.fetchGroups()
-            // Set default group if configured
             if let defaultId = settingsManager.defaultGroupId,
                groups.contains(where: { $0.id == defaultId }) {
                 selectedGroupId = defaultId
+                await loadProjects(groupId: defaultId)
             }
         } catch {
             errorMessage = "Failed to load groups: \(error.localizedDescription)"
@@ -179,7 +198,16 @@ struct PromptView: View {
         isLoadingGroups = false
     }
     
-    /// Submit the time entry - Requirements: 2.3, 2.5, 6.1
+    private func loadProjects(groupId: Int) async {
+        isLoadingProjects = true
+        do {
+            projects = try await apiClient.fetchProjects(groupId: groupId)
+        } catch {
+            projects = []
+        }
+        isLoadingProjects = false
+    }
+    
     private func submitEntry() {
         guard let groupId = selectedGroupId else { return }
         
@@ -194,6 +222,7 @@ struct PromptView: View {
         
         let request = TimeEntryRequest(
             research_group_id: groupId,
+            project_id: selectedProjectId,
             task_description: taskDescription.trimmingCharacters(in: .whitespacesAndNewlines),
             date: dateFormatter.string(from: selectedDate),
             start_time: timeFormatter.string(from: startTime),
@@ -207,7 +236,6 @@ struct PromptView: View {
                     isLoading = false
                     promptManager.dismissPrompt()
                 }
-                // Show success notification - Requirements: 2.5
                 await notificationManager.showEntryCreatedNotification(
                     hours: response.total_hours,
                     taskDescription: response.task_description
@@ -217,7 +245,6 @@ struct PromptView: View {
                     errorMessage = "Failed to save entry: \(error.localizedDescription)"
                     isLoading = false
                 }
-                // Show error notification - Requirements: 6.1
                 await notificationManager.showEntryErrorNotification(error: error)
             }
         }

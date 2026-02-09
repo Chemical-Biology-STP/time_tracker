@@ -200,8 +200,6 @@ class APIClient: ObservableObject {
     }
     
     /// Delete a research group from the Flask backend
-    /// - Parameter groupId: ID of the group to delete
-    /// - Throws: APIError on failure
     func deleteGroup(groupId: Int) async throws {
         let url = baseURL.appendingPathComponent("/api/groups/\(groupId)")
         
@@ -222,6 +220,147 @@ class APIClient: ObservableObject {
                 recordFailure()
                 throw APIError.serverError(httpResponse.statusCode)
             }
+        } catch let error as APIError {
+            throw error
+        } catch {
+            recordFailure()
+            throw APIError.requestFailed
+        }
+    }
+    
+    // MARK: - Project Methods
+    
+    /// Fetch projects for a research group
+    func fetchProjects(groupId: Int, includeArchived: Bool = false) async throws -> [Project] {
+        var urlComponents = URLComponents(url: baseURL.appendingPathComponent("/api/groups/\(groupId)/projects"), resolvingAgainstBaseURL: false)!
+        if includeArchived {
+            urlComponents.queryItems = [URLQueryItem(name: "include_archived", value: "true")]
+        }
+        
+        let url = urlComponents.url!
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                recordFailure()
+                throw APIError.requestFailed
+            }
+            
+            let projects = try JSONDecoder().decode([Project].self, from: data)
+            recordSuccess()
+            return projects
+        } catch let error as APIError {
+            throw error
+        } catch {
+            recordFailure()
+            throw APIError.requestFailed
+        }
+    }
+    
+    /// Create a new project under a research group
+    func createProject(groupId: Int, name: String) async throws -> Project {
+        let url = baseURL.appendingPathComponent("/api/groups/\(groupId)/projects")
+        
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.httpBody = try JSONSerialization.data(withJSONObject: ["name": name])
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: urlRequest)
+            
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 201 else {
+                recordFailure()
+                throw APIError.requestFailed
+            }
+            
+            let project = try JSONDecoder().decode(Project.self, from: data)
+            recordSuccess()
+            return project
+        } catch let error as APIError {
+            throw error
+        } catch {
+            recordFailure()
+            throw APIError.requestFailed
+        }
+    }
+    
+    /// Archive or unarchive a project
+    func archiveProject(projectId: Int, archived: Bool) async throws -> Project {
+        let url = baseURL.appendingPathComponent("/api/projects/\(projectId)/archive")
+        
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.httpBody = try JSONSerialization.data(withJSONObject: ["archived": archived])
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: urlRequest)
+            
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                recordFailure()
+                throw APIError.requestFailed
+            }
+            
+            let project = try JSONDecoder().decode(Project.self, from: data)
+            recordSuccess()
+            return project
+        } catch let error as APIError {
+            throw error
+        } catch {
+            recordFailure()
+            throw APIError.requestFailed
+        }
+    }
+    
+    /// Delete a project
+    func deleteProject(projectId: Int) async throws {
+        let url = baseURL.appendingPathComponent("/api/projects/\(projectId)")
+        
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "DELETE"
+        
+        do {
+            let (_, response) = try await URLSession.shared.data(for: urlRequest)
+            
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                recordFailure()
+                throw APIError.requestFailed
+            }
+            
+            recordSuccess()
+        } catch let error as APIError {
+            throw error
+        } catch {
+            recordFailure()
+            throw APIError.requestFailed
+        }
+    }
+    
+    /// Migrate existing project_name fields on groups into Project records
+    func migrateProjects() async throws -> Int {
+        let url = baseURL.appendingPathComponent("/api/migrate-projects")
+        
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: urlRequest)
+            
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                recordFailure()
+                throw APIError.requestFailed
+            }
+            
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let migrated = json["migrated"] as? Int {
+                recordSuccess()
+                return migrated
+            }
+            recordSuccess()
+            return 0
         } catch let error as APIError {
             throw error
         } catch {
