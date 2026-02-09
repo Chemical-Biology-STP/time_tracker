@@ -57,6 +57,43 @@ def delete_group(group_id):
     return redirect(url_for('main.groups'))
 
 
+@bp.route('/groups/<int:group_id>/projects', methods=['POST'])
+def create_project(group_id):
+    """Create a new project under a research group."""
+    group = ResearchGroup.query.get_or_404(group_id)
+    name = request.form.get('project_name_new', '').strip()
+    if not name:
+        flash('Project name cannot be empty.', 'error')
+    else:
+        project = Project(name=name, research_group_id=group_id)
+        db.session.add(project)
+        db.session.commit()
+        flash(f'Project "{name}" created.', 'success')
+    return redirect(url_for('main.groups'))
+
+
+@bp.route('/projects/<int:project_id>/archive', methods=['POST'])
+def archive_project(project_id):
+    """Toggle archive status of a project."""
+    project = Project.query.get_or_404(project_id)
+    project.archived = not project.archived
+    db.session.commit()
+    status = 'archived' if project.archived else 'unarchived'
+    flash(f'Project "{project.name}" {status}.', 'success')
+    return redirect(url_for('main.groups'))
+
+
+@bp.route('/projects/<int:project_id>/delete', methods=['POST'])
+def delete_project(project_id):
+    """Delete a project."""
+    project = Project.query.get_or_404(project_id)
+    name = project.name
+    db.session.delete(project)
+    db.session.commit()
+    flash(f'Project "{name}" deleted.', 'success')
+    return redirect(url_for('main.groups'))
+
+
 @bp.route('/groups/<int:group_id>/entries', methods=['GET', 'POST'])
 def entries(group_id):
     """List entries for a group and handle entry creation."""
@@ -120,6 +157,7 @@ def entries(group_id):
 
     # Get month filter from query params
     month_filter = request.args.get('month', '')
+    project_filter = request.args.get('project', '')
     
     # Build query
     query = TimeEntry.query.filter_by(research_group_id=group_id)
@@ -135,18 +173,29 @@ def entries(group_id):
         except (ValueError, TypeError):
             pass
     
+    if project_filter:
+        if project_filter == 'none':
+            query = query.filter(TimeEntry.project_id.is_(None))
+        else:
+            try:
+                query = query.filter(TimeEntry.project_id == int(project_filter))
+            except (ValueError, TypeError):
+                pass
+    
     all_entries = query.order_by(TimeEntry.date.desc()).all()
     
     # Get available months for filter dropdown
     all_dates = db.session.query(TimeEntry.date).filter_by(research_group_id=group_id).distinct().all()
     available_months = sorted(set(d[0].strftime('%Y-%m') for d in all_dates), reverse=True)
     
-    # Get active projects for this group
+    # Get all projects for this group (active for form, all for filter)
     projects = Project.query.filter_by(research_group_id=group_id, archived=False).all()
+    all_projects = Project.query.filter_by(research_group_id=group_id).all()
     
     return render_template('entries.html', group=group, entries=all_entries, 
                           month_filter=month_filter, available_months=available_months,
-                          projects=projects)
+                          projects=projects, all_projects=all_projects,
+                          project_filter=project_filter)
 
 
 @bp.route('/groups/<int:group_id>/summary')

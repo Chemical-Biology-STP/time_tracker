@@ -47,11 +47,19 @@
 
 <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 15px;">
     <form method="GET" action="{{ url_for('main.entries', group_id=group.id) }}" style="display: flex; gap: 10px; align-items: center; margin: 0;">
-        <label for="month" style="margin: 0;">Filter by Month:</label>
+        <label for="month" style="margin: 0;">Month:</label>
         <select name="month" id="month" onchange="this.form.submit()" style="width: auto; margin: 0; padding: 8px;">
             <option value="">All Months</option>
             {% for m in available_months %}
             <option value="{{ m }}" {% if m == month_filter %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+        </select>
+        <label for="project" style="margin: 0;">Project:</label>
+        <select name="project" id="project_filter" onchange="this.form.submit()" style="width: auto; margin: 0; padding: 8px;">
+            <option value="">All Projects</option>
+            <option value="none" {% if project_filter == 'none' %}selected{% endif %}>No Project</option>
+            {% for p in all_projects %}
+            <option value="{{ p.id }}" {% if project_filter == p.id|string %}selected{% endif %}>{{ p.name }}{% if p.archived %} (archived){% endif %}</option>
             {% endfor %}
         </select>
     </form>

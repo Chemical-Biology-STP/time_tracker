@@ -21,33 +21,50 @@
 
 <h2>All Groups</h2>
 {% if groups %}
-<table>
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Project</th>
-            <th>Manager</th>
-            <th>Actions</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for group in groups %}
-        <tr>
-            <td>{{ group.name }}</td>
-            <td>{{ group.project_name }}</td>
-            <td>{{ group.manager_name }}</td>
-            <td>
-                <a href="{{ url_for('main.entries', group_id=group.id) }}">Entries</a> |
-                <a href="{{ url_for('main.calendar_view', group_id=group.id) }}">Calendar</a> |
-                <a href="{{ url_for('main.summary', group_id=group.id) }}">Summary</a> |
-                <form method="POST" action="{{ url_for('main.delete_group', group_id=group.id) }}" style="display:inline;" onsubmit="return confirm('Delete this group and all its entries?');">
-                    <button type="submit" class="delete-btn">Delete</button>
+{% for group in groups %}
+<div style="background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 6px; padding: 16px; margin-bottom: 16px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <div>
+            <strong style="font-size: 16px;">{{ group.name }}</strong>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <a href="{{ url_for('main.entries', group_id=group.id) }}" style="font-size: 13px;">Entries</a>
+            <a href="{{ url_for('main.calendar_view', group_id=group.id) }}" style="font-size: 13px;">Calendar</a>
+            <a href="{{ url_for('main.summary', group_id=group.id) }}" style="font-size: 13px;">Summary</a>
+            <form method="POST" action="{{ url_for('main.delete_group', group_id=group.id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Delete this group and all its entries?');">
+                <button type="submit" class="delete-btn" style="font-size: 11px;">Delete</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Projects -->
+    <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #ddd;">
+        <div style="font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Projects</div>
+        {% if group.projects %}
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
+            {% for project in group.projects %}
+            <div style="display: inline-flex; align-items: center; gap: 4px; background: {{ '#fff3cd' if project.archived else '#e8f5e9' }}; border: 1px solid {{ '#ffc107' if project.archived else '#a5d6a7' }}; border-radius: 4px; padding: 4px 8px; font-size: 13px;">
+                <a href="{{ url_for('main.entries', group_id=group.id, project=project.id) }}" style="text-decoration: none; color: #333;">{{ project.name }}</a>
+                {% if project.archived %}<span style="color: #856404; font-size: 11px;">(archived)</span>{% endif %}
+                <form method="POST" action="{{ url_for('main.archive_project', project_id=project.id) }}" style="display:inline; margin:0;">
+                    <button type="submit" title="{{ 'Unarchive' if project.archived else 'Archive' }}" style="background: none; border: none; cursor: pointer; padding: 0 2px; font-size: 13px; color: #888;">{{ '📂' if project.archived else '📁' }}</button>
                 </form>
-            </td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+                <form method="POST" action="{{ url_for('main.delete_project', project_id=project.id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Delete project {{ project.name }}?');">
+                    <button type="submit" title="Delete" style="background: none; border: none; cursor: pointer; padding: 0 2px; font-size: 13px; color: #e74c3c;">🗑️</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div style="font-size: 13px; color: #999; margin-bottom: 8px;">No projects yet</div>
+        {% endif %}
+        <form method="POST" action="{{ url_for('main.create_project', group_id=group.id) }}" style="display: flex; gap: 8px; align-items: center; margin: 0;">
+            <input type="text" name="project_name_new" placeholder="New project name..." style="width: 200px; padding: 5px 8px; margin: 0; font-size: 13px;">
+            <button type="submit" style="padding: 5px 12px; font-size: 13px; background: #28a745;">+ Add Project</button>
+        </form>
+    </div>
+</div>
+{% endfor %}
 {% else %}
 <div class="empty-state">
     <p>No research groups yet. Create one above!</p>

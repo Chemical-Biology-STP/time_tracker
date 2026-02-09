@@ -20,7 +20,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('submitBtn').addEventListener('click', submitEntry);
   document.getElementById('settingsBtn').addEventListener('click', openSettings);
   document.getElementById('exportBtn').addEventListener('click', exportCSV);
-  document.getElementById('entriesGroupFilter').addEventListener('change', loadEntries);
+  document.getElementById('entriesGroupFilter').addEventListener('change', onEntriesGroupChange);
+  document.getElementById('entriesProjectFilter').addEventListener('change', loadEntries);
   document.getElementById('entriesYearFilter').addEventListener('change', loadEntries);
   document.getElementById('entriesMonthFilter').addEventListener('change', loadEntries);
   document.getElementById('summaryGroupFilter').addEventListener('change', loadSummary);
@@ -81,6 +82,8 @@ function initializeEntriesPanel() {
     option.textContent = g.name;
     filter.appendChild(option);
   });
+  // Reset project filter
+  document.getElementById('entriesProjectFilter').innerHTML = '<option value="">All Projects</option>';
   populateDateFilters('entries');
   loadEntries();
 }
@@ -133,7 +136,38 @@ async function getFilteredEntries(prefix) {
   if (year) entries = entries.filter(e => e.date && e.date.startsWith(year));
   if (month) entries = entries.filter(e => e.date && e.date.substring(5, 7) === month);
   
+  // Project filter (entries panel only)
+  if (prefix === 'entries') {
+    const projectId = document.getElementById('entriesProjectFilter').value;
+    if (projectId === 'none') {
+      entries = entries.filter(e => !e.projectId);
+    } else if (projectId) {
+      entries = entries.filter(e => e.projectId === parseInt(projectId));
+    }
+  }
+  
   return entries;
+}
+
+async function onEntriesGroupChange() {
+  const groupId = document.getElementById('entriesGroupFilter').value;
+  const projectFilter = document.getElementById('entriesProjectFilter');
+  projectFilter.innerHTML = '<option value="">All Projects</option>';
+  
+  if (groupId) {
+    const projects = await Storage.getProjectsByGroup(parseInt(groupId), true);
+    if (projects.length > 0) {
+      projectFilter.innerHTML += '<option value="none">No Project</option>';
+      projects.forEach(p => {
+        const option = document.createElement('option');
+        option.value = p.id;
+        option.textContent = p.name + (p.archived ? ' (archived)' : '');
+        projectFilter.appendChild(option);
+      });
+    }
+  }
+  
+  loadEntries();
 }
 
 async function loadEntries() {

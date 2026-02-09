@@ -21,10 +21,22 @@ def create_app(config=None):
     # Initialize extensions
     db.init_app(app)
     
-    # Create tables
+    # Create tables and run migrations
     with app.app_context():
         from . import models  # noqa: F401
         db.create_all()
+        
+        # Auto-migrate: add missing columns to existing tables
+        from sqlalchemy import inspect, text
+        inspector = inspect(db.engine)
+        
+        if 'time_entries' in inspector.get_table_names():
+            columns = [col['name'] for col in inspector.get_columns('time_entries')]
+            if 'project_id' not in columns:
+                db.session.execute(text(
+                    'ALTER TABLE time_entries ADD COLUMN project_id INTEGER REFERENCES projects(id)'
+                ))
+                db.session.commit()
 
     # Register blueprints
     from . import routes
