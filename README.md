@@ -27,7 +27,13 @@ A standalone Chrome extension that works on any OS. No server required - data sy
 
 A native macOS menu bar app with bundled Flask server.
 
-**Installation:**
+**Install via Homebrew (recommended):**
+```bash
+brew tap Chemical-Biology-STP/tap
+brew install --cask time-tracker-companion
+```
+
+**Or install manually:**
 1. Download `TimeTrackerCompanion.dmg` from [Releases](https://github.com/Chemical-Biology-STP/time_tracker/releases)
 2. Open the DMG and drag to Applications
 3. If you see "app is damaged" error, run:
@@ -35,6 +41,11 @@ A native macOS menu bar app with bundled Flask server.
    xattr -cr /Applications/TimeTrackerCompanion.app
    ```
 4. Launch from Applications
+
+**Update via Homebrew:**
+```bash
+brew upgrade --cask time-tracker-companion
+```
 
 **Features:**
 - Menu bar icon with quick access
