@@ -1,0 +1,434 @@
+{% extends "base.html" %}
+
+{% block title %}Overall Summary - Time Tracker{% endblock %}
+
+{% block content %}
+<div class="summary-header">
+    <div>
+        <h1>Summary</h1>
+        <p class="subtitle">{{ period_label }}</p>
+    </div>
+    <div class="summary-nav">
+        <a href="{{ url_for('main.groups') }}" class="nav-link">Groups</a>
+        <a href="{{ url_for('main.overall_calendar') }}" class="nav-link">Calendar</a>
+    </div>
+</div>
+
+<!-- Filters -->
+<form method="GET" action="{{ url_for('main.overall_summary') }}" class="filter-form">
+    <select name="year" onchange="this.form.submit()">
+        <option value="">All Years</option>
+        {% for y in available_years %}
+        <option value="{{ y }}" {% if year_filter == y|string %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+    </select>
+    <select name="month" onchange="this.form.submit()">
+        <option value="">All Months</option>
+        {% set month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] %}
+        {% for m in available_months %}
+        <option value="{{ m }}" {% if month_filter == m|string %}selected{% endif %}>{{ month_names[m] }}</option>
+        {% endfor %}
+    </select>
+    {% if year_filter or month_filter %}
+    <a href="{{ url_for('main.overall_summary') }}" class="clear-filter">Clear</a>
+    {% endif %}
+</form>
+
+<!-- Stat Cards -->
+<div class="stat-cards">
+    <div class="stat-card">
+        <div class="stat-value">{{ "%.1f"|format(total_hours) }}</div>
+        <div class="stat-label">Total Hours</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">£{{ "%.2f"|format(total_pay) }}</div>
+        <div class="stat-label">Total Pay</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ total_entries }}</div>
+        <div class="stat-label">Entries</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ group_breakdown|length }}</div>
+        <div class="stat-label">Groups</div>
+    </div>
+</div>
+
+{% if group_breakdown %}
+<div class="chart-section">
+    <h2>Hours by Research Group</h2>
+    <div class="chart-wrapper">
+        <canvas id="groupChart" height="200"></canvas>
+    </div>
+    <table class="breakdown-table">
+        <thead>
+            <tr>
+                <th>Group</th>
+                <th>Entries</th>
+                <th>Hours</th>
+                <th>Pay</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for g in group_breakdown %}
+            <tr>
+                <td><a href="{{ url_for('main.summary', group_id=g.id) }}">{{ g.name }}</a></td>
+                <td>{{ g.entries }}</td>
+                <td>{{ "%.1f"|format(g.hours) }}</td>
+                <td>£{{ "%.2f"|format(g.pay) }}</td>
+                <td>
+                    <div class="bar-cell">
+                        <div class="bar-fill" style="width: {{ g.pct }}%;"></div>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if project_rows %}
+<div class="chart-section">
+    <h2>Hours by Project</h2>
+    <div class="chart-wrapper">
+        <canvas id="projectChart"></canvas>
+    </div>
+    <table class="breakdown-table">
+        <thead>
+            <tr>
+                <th>Group</th>
+                <th>Project</th>
+                <th>Entries</th>
+                <th>Hours</th>
+                <th>Pay</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% set ns = namespace(prev_group='') %}
+            {% for p in project_rows %}
+            <tr{% if p.archived %} style="opacity: 0.5;"{% endif %}{% if p.is_unassigned %} class="unassigned-row"{% endif %}>
+                <td>
+                    {% if p.group_name != ns.prev_group %}
+                        <span class="group-label">{{ p.group_name }}</span>
+                        {% set ns.prev_group = p.group_name %}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if p.is_unassigned %}
+                    <span class="expandable" data-target="unassigned-{{ loop.index }}">
+                        ▶ {{ p.name }}
+                    </span>
+                    {% else %}
+                    {{ p.name }}{% if p.archived %} <span style="font-size:11px;color:#856404;">(archived)</span>{% endif %}
+                    {% endif %}
+                </td>
+                <td>{{ p.entries }}</td>
+                <td>{{ "%.1f"|format(p.hours) }}</td>
+                <td>£{{ "%.2f"|format(p.pay) }}</td>
+                <td>
+                    <div class="bar-cell">
+                        <div class="bar-fill" style="width: {{ p.pct }}%;"></div>
+                    </div>
+                </td>
+            </tr>
+            {% if p.is_unassigned and p.unassigned_items %}
+            <tr class="unassigned-detail" id="unassigned-{{ loop.index }}" style="display:none;">
+                <td colspan="6">
+                    <div class="detail-items">
+                        {% for item in p.unassigned_items %}
+                        <div class="detail-item">
+                            <span class="detail-date">{{ item.date }}</span>
+                            <span class="detail-task">{{ item.task }}</span>
+                            <span class="detail-hours">{{ "%.2f"|format(item.hours) }}h</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<p class="back-link">
+    <a href="{{ url_for('main.groups') }}">← Back to Groups</a>
+</p>
+
+<style>
+    .summary-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 16px;
+    }
+    .summary-header h1 { margin-bottom: 4px; }
+    .subtitle { color: #666; font-size: 14px; }
+    .summary-nav { display: flex; gap: 8px; }
+    .nav-link {
+        padding: 8px 14px;
+        border-radius: 6px;
+        text-decoration: none;
+        font-size: 13px;
+        color: #333;
+        background: #f0f0f0;
+    }
+    .nav-link:hover { background: #e0e0e0; }
+
+    .filter-form {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    .filter-form select {
+        width: auto;
+        padding: 8px 12px;
+        margin: 0;
+    }
+    .clear-filter {
+        font-size: 13px;
+        color: #e74c3c;
+        text-decoration: none;
+    }
+    .clear-filter:hover { text-decoration: underline; }
+
+    .stat-cards {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-bottom: 28px;
+    }
+    .stat-card {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 16px;
+        text-align: center;
+        border: 1px solid #eee;
+    }
+    .stat-value {
+        font-size: 26px;
+        font-weight: 700;
+        color: #2c3e50;
+        line-height: 1.2;
+    }
+    .stat-label {
+        font-size: 12px;
+        color: #888;
+        margin-top: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .chart-section {
+        margin-bottom: 28px;
+    }
+    .chart-section h2 {
+        font-size: 16px;
+        margin-bottom: 12px;
+        color: #444;
+    }
+    .chart-wrapper {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 16px;
+        border: 1px solid #eee;
+        margin-bottom: 12px;
+    }
+
+    .breakdown-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .breakdown-table th {
+        text-align: left;
+        font-size: 12px;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 8px 12px;
+        border-bottom: 2px solid #eee;
+        background: transparent;
+    }
+    .breakdown-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 14px;
+    }
+    .breakdown-table a {
+        color: #3498db;
+        text-decoration: none;
+    }
+    .breakdown-table a:hover { text-decoration: underline; }
+    .breakdown-table th:last-child { width: 20%; }
+
+    .group-label {
+        font-weight: 600;
+        color: #2c3e50;
+    }
+
+    .bar-cell {
+        background: #f0f0f0;
+        border-radius: 4px;
+        height: 8px;
+        overflow: hidden;
+    }
+    .bar-fill {
+        height: 100%;
+        background: #3498db;
+        border-radius: 4px;
+        min-width: 2px;
+    }
+
+    .expandable {
+        cursor: pointer;
+        color: #3498db;
+        user-select: none;
+    }
+    .expandable:hover { text-decoration: underline; }
+    .expandable.open { }
+
+    .detail-items {
+        padding: 8px 0;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .detail-item {
+        display: flex;
+        gap: 12px;
+        padding: 4px 8px;
+        font-size: 13px;
+        border-bottom: 1px solid #f5f5f5;
+    }
+    .detail-item:last-child { border-bottom: none; }
+    .detail-date { color: #888; min-width: 85px; }
+    .detail-task { flex: 1; color: #333; }
+    .detail-hours { color: #3498db; font-weight: 600; min-width: 50px; text-align: right; }
+
+    .unassigned-row td { background: #fafafa; }
+    .unassigned-detail td { background: #f8f8f8; padding: 0 12px; }
+
+    .back-link { margin-top: 20px; }
+    .back-link a { color: #666; text-decoration: none; }
+    .back-link a:hover { color: #333; }
+
+    @media (max-width: 600px) {
+        .stat-cards { grid-template-columns: repeat(2, 1fr); }
+        .summary-header { flex-direction: column; gap: 12px; }
+    }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    const groupData = {{ group_breakdown | tojson }};
+    const projectRows = {{ project_rows | tojson }};
+    const colors = ['#3498db','#e74c3c','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#34495e','#16a085','#c0392b'];
+
+    // Group doughnut chart
+    if (groupData.length > 0) {
+        new Chart(document.getElementById('groupChart'), {
+            type: 'doughnut',
+            data: {
+                labels: groupData.map(g => g.name),
+                datasets: [{
+                    data: groupData.map(g => g.hours),
+                    backgroundColor: colors.slice(0, groupData.length)
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'right' },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => `${ctx.label}: ${ctx.parsed.toFixed(1)}h (${groupData[ctx.dataIndex].pct}%)`
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Project bar chart — horizontal, one bar per group (sum of all projects + unassigned)
+    if (projectRows.length > 0) {
+        const projectCanvas = document.getElementById('projectChart');
+
+        // Aggregate hours per group
+        const groupHours = {};
+        const groupOrderSet = [];
+        projectRows.forEach(p => {
+            if (!groupHours[p.group_name]) {
+                groupHours[p.group_name] = 0;
+                groupOrderSet.push(p.group_name);
+            }
+            groupHours[p.group_name] += p.hours;
+        });
+        // Sort by hours desc
+        groupOrderSet.sort((a, b) => groupHours[b] - groupHours[a]);
+
+        const chartHeight = Math.max(200, groupOrderSet.length * 50 + 60);
+        projectCanvas.parentElement.style.height = chartHeight + 'px';
+
+        new Chart(projectCanvas, {
+            type: 'bar',
+            data: {
+                labels: groupOrderSet,
+                datasets: [{
+                    label: 'Hours',
+                    data: groupOrderSet.map(g => Math.round(groupHours[g] * 100) / 100),
+                    backgroundColor: groupOrderSet.map((_, i) => colors[i % colors.length]),
+                    borderRadius: 4,
+                    maxBarThickness: 28,
+                    barPercentage: 0.6,
+                    categoryPercentage: 0.7
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => ctx.parsed.x.toFixed(1) + ' hours'
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        grid: { color: '#f0f0f0' },
+                        ticks: { callback: v => v + 'h' }
+                    },
+                    y: {
+                        grid: { display: false },
+                        ticks: {
+                            font: { size: 12, weight: 'bold' },
+                            color: '#2c3e50'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Expandable unassigned rows
+    document.querySelectorAll('.expandable').forEach(el => {
+        el.addEventListener('click', () => {
+            const target = document.getElementById(el.dataset.target);
+            if (target) {
+                const isOpen = target.style.display !== 'none';
+                target.style.display = isOpen ? 'none' : 'table-row';
+                el.textContent = (isOpen ? '▶' : '▼') + ' (No project)';
+            }
+        });
+    });
+})();
+</script>
+{% endblock %}

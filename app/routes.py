@@ -270,6 +270,144 @@ def entries(group_id):
                           project_filter=project_filter)
 
 
+@bp.route('/summary')
+def overall_summary():
+    """Display overall summary with hours broken down by group and project."""
+    from calendar import monthrange
+    
+    year_filter = request.args.get('year', '', type=str)
+    month_filter = request.args.get('month', '', type=str)
+    
+    # Parse filters
+    try:
+        year_val = int(year_filter) if year_filter else None
+    except (ValueError, TypeError):
+        year_val = None
+    try:
+        month_val = int(month_filter) if month_filter else None
+    except (ValueError, TypeError):
+        month_val = None
+    
+    # Build query with filters
+    query = TimeEntry.query
+    if year_val and month_val:
+        start_date = datetime(year_val, month_val, 1).date()
+        _, last_day = monthrange(year_val, month_val)
+        end_date = datetime(year_val, month_val, last_day).date()
+        query = query.filter(TimeEntry.date >= start_date, TimeEntry.date <= end_date)
+    elif year_val:
+        start_date = datetime(year_val, 1, 1).date()
+        end_date = datetime(year_val, 12, 31).date()
+        query = query.filter(TimeEntry.date >= start_date, TimeEntry.date <= end_date)
+    
+    entries = query.all()
+    all_groups = ResearchGroup.query.all()
+    
+    # Available years/months for filter dropdowns
+    all_dates = db.session.query(TimeEntry.date).distinct().all()
+    available_years = sorted(set(d[0].year for d in all_dates), reverse=True)
+    available_months = list(range(1, 13))
+    
+    total_hours = sum(e.total_hours for e in entries)
+    total_pay = round(total_hours * 107.93, 2)
+    
+    group_map = {g.id: g for g in all_groups}
+    
+    # Hours by group
+    group_breakdown = []
+    for g in all_groups:
+        g_entries = [e for e in entries if e.research_group_id == g.id]
+        g_hours = sum(e.total_hours for e in g_entries)
+        if g_hours > 0:
+            group_breakdown.append({
+                'id': g.id,
+                'name': g.name,
+                'hours': round(g_hours, 2),
+                'pay': round(g_hours * 107.93, 2),
+                'entries': len(g_entries),
+                'pct': round(g_hours / total_hours * 100, 1) if total_hours > 0 else 0
+            })
+    group_breakdown.sort(key=lambda x: x['hours'], reverse=True)
+    
+    # Hours by project, grouped by research group
+    all_projects = Project.query.all()
+    
+    # Build project rows
+    project_rows = []
+    for p in all_projects:
+        p_entries = [e for e in entries if e.project_id == p.id]
+        p_hours = sum(e.total_hours for e in p_entries)
+        if p_hours > 0:
+            g = group_map.get(p.research_group_id)
+            project_rows.append({
+                'name': p.name,
+                'group_name': g.name if g else 'Unknown',
+                'group_id': p.research_group_id,
+                'hours': round(p_hours, 2),
+                'pay': round(p_hours * 107.93, 2),
+                'entries': len(p_entries),
+                'pct': round(p_hours / total_hours * 100, 1) if total_hours > 0 else 0,
+                'archived': p.archived,
+                'is_unassigned': False,
+                'unassigned_items': []
+            })
+    
+    # Unassigned entries per group (with detail items)
+    unassigned_by_group = {}
+    for e in entries:
+        if not e.project_id:
+            gid = e.research_group_id
+            if gid not in unassigned_by_group:
+                unassigned_by_group[gid] = {'hours': 0, 'entries': 0, 'items': []}
+            unassigned_by_group[gid]['hours'] += e.total_hours
+            unassigned_by_group[gid]['entries'] += 1
+            unassigned_by_group[gid]['items'].append({
+                'date': e.date.strftime('%Y-%m-%d'),
+                'task': e.task_description,
+                'hours': round(e.total_hours, 2)
+            })
+    
+    for gid, data in unassigned_by_group.items():
+        g = group_map.get(gid)
+        project_rows.append({
+            'name': '(No project)',
+            'group_name': g.name if g else 'Unknown',
+            'group_id': gid,
+            'hours': round(data['hours'], 2),
+            'pay': round(data['hours'] * 107.93, 2),
+            'entries': data['entries'],
+            'pct': round(data['hours'] / total_hours * 100, 1) if total_hours > 0 else 0,
+            'archived': False,
+            'is_unassigned': True,
+            'unassigned_items': sorted(data['items'], key=lambda x: x['date'], reverse=True)
+        })
+    
+    # Sort: group by group_name, then by hours desc within each group
+    project_rows.sort(key=lambda x: (-sum(r['hours'] for r in project_rows if r['group_id'] == x['group_id']), x['group_name'], -x['hours']))
+    
+    # Period label
+    if year_val and month_val:
+        month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+                       'July', 'August', 'September', 'October', 'November', 'December']
+        period_label = f"{month_names[month_val]} {year_val}"
+    elif year_val:
+        period_label = str(year_val)
+    else:
+        period_label = "All Time"
+    
+    return render_template('overall_summary.html',
+                          total_hours=total_hours,
+                          total_pay=total_pay,
+                          total_entries=len(entries),
+                          group_breakdown=group_breakdown,
+                          project_rows=project_rows,
+                          available_years=available_years,
+                          available_months=available_months,
+                          year_filter=year_filter,
+                          month_filter=month_filter,
+                          period_label=period_label)
+
+
 @bp.route('/groups/<int:group_id>/summary')
 def summary(group_id):
     """Display summary dashboard for a research group."""
@@ -305,6 +443,40 @@ def summary(group_id):
     num_entries = len(entries)
     days_worked = len(daily_hours)
     avg_hours_per_day = round(total_hours / days_worked, 2) if days_worked > 0 else 0
+    
+    # Project breakdown within this group
+    projects = Project.query.filter_by(research_group_id=group_id).all()
+    project_breakdown = []
+    unassigned_hours = 0
+    unassigned_entries = 0
+    for entry in entries:
+        if not entry.project_id:
+            unassigned_hours += entry.total_hours
+            unassigned_entries += 1
+    
+    for p in projects:
+        p_hours = sum(e.total_hours for e in entries if e.project_id == p.id)
+        p_count = sum(1 for e in entries if e.project_id == p.id)
+        if p_hours > 0 or p_count > 0:
+            project_breakdown.append({
+                'name': p.name,
+                'hours': round(p_hours, 2),
+                'pay': round(p_hours * 107.93, 2),
+                'entries': p_count,
+                'pct': round(p_hours / total_hours * 100, 1) if total_hours > 0 else 0,
+                'archived': p.archived
+            })
+    project_breakdown.sort(key=lambda x: x['hours'], reverse=True)
+    
+    if unassigned_hours > 0:
+        project_breakdown.append({
+            'name': '(No project)',
+            'hours': round(unassigned_hours, 2),
+            'pay': round(unassigned_hours * 107.93, 2),
+            'entries': unassigned_entries,
+            'pct': round(unassigned_hours / total_hours * 100, 1) if total_hours > 0 else 0,
+            'archived': False
+        })
 
     return render_template(
         'summary.html',
@@ -317,7 +489,8 @@ def summary(group_id):
         monthly_data=monthly_data,
         num_entries=num_entries,
         days_worked=days_worked,
-        avg_hours_per_day=avg_hours_per_day
+        avg_hours_per_day=avg_hours_per_day,
+        project_breakdown=project_breakdown
     )
 
 

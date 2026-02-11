@@ -65,6 +65,39 @@
 
 <!-- Monthly Breakdown -->
 {% if monthly_data %}
+
+<!-- Project Breakdown -->
+{% if project_breakdown %}
+<div class="chart-section">
+    <h2>Hours by Project</h2>
+    <table class="monthly-table">
+        <thead>
+            <tr>
+                <th>Project</th>
+                <th>Entries</th>
+                <th>Hours</th>
+                <th>Pay</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in project_breakdown %}
+            <tr{% if p.archived %} style="opacity: 0.5;"{% endif %}>
+                <td>{{ p.name }}{% if p.archived %} <span style="font-size:11px;color:#856404;">(archived)</span>{% endif %}</td>
+                <td>{{ p.entries }}</td>
+                <td>{{ "%.1f"|format(p.hours) }}</td>
+                <td>£{{ "%.2f"|format(p.pay) }}</td>
+                <td>
+                    <div class="bar-cell">
+                        <div class="bar-fill" style="width: {{ p.pct }}%;"></div>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
 <div class="chart-section">
     <h2>Monthly Breakdown</h2>
     <table class="monthly-table">

@@ -243,6 +243,12 @@ async function loadSummary() {
   
   // Monthly breakdown
   renderMonthlyTable(entries, totalHours, hourlyRate);
+  
+  // Group breakdown
+  renderGroupBreakdown(entries, totalHours, hourlyRate);
+  
+  // Project breakdown
+  await renderProjectBreakdown(entries, totalHours, hourlyRate);
 }
 
 function renderHeatmap(dailyHours) {
@@ -398,6 +404,163 @@ function renderMonthlyTable(entries, totalHours, hourlyRate) {
   
   html += '</tbody></table>';
   container.innerHTML = html;
+}
+
+function renderGroupBreakdown(entries, totalHours, hourlyRate) {
+  const groupMap = {};
+  groups.forEach(g => groupMap[g.id] = g);
+  
+  const byGroup = {};
+  entries.forEach(e => {
+    const gid = e.groupId;
+    if (!byGroup[gid]) byGroup[gid] = { hours: 0, entries: 0 };
+    byGroup[gid].hours += e.totalHours;
+    byGroup[gid].entries++;
+  });
+  
+  const sorted = Object.entries(byGroup)
+    .map(([gid, data]) => ({ name: (groupMap[parseInt(gid)] || {}).name || 'Unknown', ...data }))
+    .sort((a, b) => b.hours - a.hours);
+  
+  const container = document.getElementById('groupBreakdown');
+  if (sorted.length === 0) {
+    container.innerHTML = '<div style="text-align:center;color:#999;font-size:12px;padding:8px;">No data</div>';
+    return;
+  }
+  
+  let html = `<table class="monthly-table"><thead><tr>
+    <th>Group</th><th>Entries</th><th>Hours</th><th>Pay</th><th></th>
+  </tr></thead><tbody>`;
+  
+  sorted.forEach(row => {
+    const pct = totalHours > 0 ? (row.hours / totalHours * 100) : 0;
+    html += `<tr>
+      <td>${escapeHtml(row.name)}</td>
+      <td>${row.entries}</td>
+      <td>${row.hours.toFixed(1)}</td>
+      <td>£${(row.hours * hourlyRate).toFixed(0)}</td>
+      <td><div class="bar-cell"><div class="bar-fill" style="width:${pct}%"></div></div></td>
+    </tr>`;
+  });
+  
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+async function renderProjectBreakdown(entries, totalHours, hourlyRate) {
+  const projects = await Storage.getProjects();
+  const projectMap = {};
+  projects.forEach(p => projectMap[p.id] = p);
+  
+  const groupMap = {};
+  groups.forEach(g => groupMap[g.id] = g);
+  
+  // Build rows: named projects + unassigned per group
+  const rows = [];
+  const unassignedByGroup = {};
+  
+  // Named projects
+  const byProject = {};
+  entries.forEach(e => {
+    if (e.projectId) {
+      if (!byProject[e.projectId]) byProject[e.projectId] = { hours: 0, entries: 0 };
+      byProject[e.projectId].hours += e.totalHours;
+      byProject[e.projectId].entries++;
+    } else {
+      const gid = e.groupId;
+      if (!unassignedByGroup[gid]) unassignedByGroup[gid] = { hours: 0, entries: 0, items: [] };
+      unassignedByGroup[gid].hours += e.totalHours;
+      unassignedByGroup[gid].entries++;
+      unassignedByGroup[gid].items.push({ date: e.date, task: e.taskDescription, hours: e.totalHours });
+    }
+  });
+  
+  Object.entries(byProject).forEach(([pid, data]) => {
+    const project = projectMap[parseInt(pid)];
+    const group = project ? groupMap[project.groupId] : null;
+    rows.push({
+      name: project ? project.name : 'Unknown',
+      groupName: group ? group.name : '-',
+      groupId: project ? project.groupId : 0,
+      isUnassigned: false,
+      items: [],
+      ...data
+    });
+  });
+  
+  Object.entries(unassignedByGroup).forEach(([gid, data]) => {
+    const group = groupMap[parseInt(gid)];
+    rows.push({
+      name: '(No project)',
+      groupName: group ? group.name : 'Unknown',
+      groupId: parseInt(gid),
+      isUnassigned: true,
+      items: data.items.sort((a, b) => b.date.localeCompare(a.date)),
+      hours: data.hours,
+      entries: data.entries
+    });
+  });
+  
+  // Sort: group rows together by group, then hours desc within group
+  const groupTotals = {};
+  rows.forEach(r => { groupTotals[r.groupId] = (groupTotals[r.groupId] || 0) + r.hours; });
+  rows.sort((a, b) => (groupTotals[b.groupId] - groupTotals[a.groupId]) || a.groupName.localeCompare(b.groupName) || (b.hours - a.hours));
+  
+  const container = document.getElementById('projectBreakdown');
+  if (rows.length === 0) {
+    container.innerHTML = '<div style="text-align:center;color:#999;font-size:12px;padding:8px;">No data</div>';
+    return;
+  }
+  
+  let html = `<table class="monthly-table"><thead><tr>
+    <th>Group</th><th>Project</th><th>Hours</th><th>Pay</th><th></th>
+  </tr></thead><tbody>`;
+  
+  let prevGroup = '';
+  rows.forEach((row, idx) => {
+    const pct = totalHours > 0 ? (row.hours / totalHours * 100) : 0;
+    const showGroup = row.groupName !== prevGroup;
+    prevGroup = row.groupName;
+    
+    html += `<tr${row.isUnassigned ? ' style="background:#fafafa;"' : ''}>
+      <td>${showGroup ? '<strong>' + escapeHtml(row.groupName) + '</strong>' : ''}</td>
+      <td>${row.isUnassigned
+        ? `<span class="expand-toggle" data-idx="${idx}" style="cursor:pointer;color:#0078d4;">▶ (No project)</span>`
+        : escapeHtml(row.name)}</td>
+      <td>${row.hours.toFixed(1)}</td>
+      <td>£${(row.hours * hourlyRate).toFixed(0)}</td>
+      <td><div class="bar-cell"><div class="bar-fill" style="width:${pct}%"></div></div></td>
+    </tr>`;
+    
+    if (row.isUnassigned && row.items.length > 0) {
+      html += `<tr class="detail-row" id="detail-${idx}" style="display:none;">
+        <td colspan="5" style="padding:4px 12px;background:#f8f8f8;">
+          <div style="max-height:150px;overflow-y:auto;">
+            ${row.items.map(it => `<div style="display:flex;gap:8px;padding:3px 0;font-size:11px;border-bottom:1px solid #f0f0f0;">
+              <span style="color:#888;min-width:70px;">${escapeHtml(it.date)}</span>
+              <span style="flex:1;color:#333;">${escapeHtml(it.task)}</span>
+              <span style="color:#0078d4;font-weight:600;">${it.hours.toFixed(2)}h</span>
+            </div>`).join('')}
+          </div>
+        </td>
+      </tr>`;
+    }
+  });
+  
+  html += '</tbody></table>';
+  container.innerHTML = html;
+  
+  // Attach expand handlers
+  container.querySelectorAll('.expand-toggle').forEach(el => {
+    el.addEventListener('click', () => {
+      const detail = document.getElementById('detail-' + el.dataset.idx);
+      if (detail) {
+        const open = detail.style.display !== 'none';
+        detail.style.display = open ? 'none' : 'table-row';
+        el.textContent = (open ? '▶' : '▼') + ' (No project)';
+      }
+    });
+  });
 }
 
 // ── Calendar ──
