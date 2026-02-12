@@ -85,6 +85,15 @@
             </tr>
             {% endfor %}
         </tbody>
+        <tfoot>
+            <tr style="font-weight:600; border-top:2px solid #ddd;">
+                <td>Total</td>
+                <td>{{ total_entries }}</td>
+                <td>{{ "%.1f"|format(total_hours) }}</td>
+                <td>£{{ "%.2f"|format(total_pay) }}</td>
+                <td></td>
+            </tr>
+        </tfoot>
     </table>
 </div>
 {% endif %}
@@ -151,6 +160,16 @@
             {% endif %}
             {% endfor %}
         </tbody>
+        <tfoot>
+            <tr style="font-weight:600; border-top:2px solid #ddd;">
+                <td></td>
+                <td>Total</td>
+                <td>{{ total_entries }}</td>
+                <td>{{ "%.1f"|format(total_hours) }}</td>
+                <td>£{{ "%.2f"|format(total_pay) }}</td>
+                <td></td>
+            </tr>
+        </tfoot>
     </table>
 </div>
 {% endif %}

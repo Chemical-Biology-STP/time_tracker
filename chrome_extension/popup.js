@@ -391,7 +391,9 @@ function renderMonthlyTable(entries, totalHours, hourlyRate) {
     <th>Month</th><th>Entries</th><th>Hours</th><th>Pay</th><th></th>
   </tr></thead><tbody>`;
   
+  let totalMonthEntries = 0;
   sorted.forEach(([month, data]) => {
+    totalMonthEntries += data.entries;
     const pct = totalHours > 0 ? (data.hours / totalHours * 100) : 0;
     html += `<tr>
       <td>${month}</td>
@@ -402,7 +404,13 @@ function renderMonthlyTable(entries, totalHours, hourlyRate) {
     </tr>`;
   });
   
-  html += '</tbody></table>';
+  html += `</tbody><tfoot><tr style="font-weight:600;border-top:2px solid #ddd;">
+    <td>Total</td>
+    <td>${totalMonthEntries}</td>
+    <td>${totalHours.toFixed(1)}</td>
+    <td>£${(totalHours * hourlyRate).toFixed(0)}</td>
+    <td></td>
+  </tr></tfoot></table>`;
   container.innerHTML = html;
 }
 
@@ -432,7 +440,9 @@ function renderGroupBreakdown(entries, totalHours, hourlyRate) {
     <th>Group</th><th>Entries</th><th>Hours</th><th>Pay</th><th></th>
   </tr></thead><tbody>`;
   
+  let totalEntries = 0;
   sorted.forEach(row => {
+    totalEntries += row.entries;
     const pct = totalHours > 0 ? (row.hours / totalHours * 100) : 0;
     html += `<tr>
       <td>${escapeHtml(row.name)}</td>
@@ -443,7 +453,13 @@ function renderGroupBreakdown(entries, totalHours, hourlyRate) {
     </tr>`;
   });
   
-  html += '</tbody></table>';
+  html += `</tbody><tfoot><tr style="font-weight:600;border-top:2px solid #ddd;">
+    <td>Total</td>
+    <td>${totalEntries}</td>
+    <td>${totalHours.toFixed(1)}</td>
+    <td>£${(totalHours * hourlyRate).toFixed(0)}</td>
+    <td></td>
+  </tr></tfoot></table>`;
   container.innerHTML = html;
 }
 
@@ -517,7 +533,9 @@ async function renderProjectBreakdown(entries, totalHours, hourlyRate) {
   </tr></thead><tbody>`;
   
   let prevGroup = '';
+  let totalRowEntries = 0;
   rows.forEach((row, idx) => {
+    totalRowEntries += row.entries;
     const pct = totalHours > 0 ? (row.hours / totalHours * 100) : 0;
     const showGroup = row.groupName !== prevGroup;
     prevGroup = row.groupName;
@@ -547,7 +565,13 @@ async function renderProjectBreakdown(entries, totalHours, hourlyRate) {
     }
   });
   
-  html += '</tbody></table>';
+  html += `</tbody><tfoot><tr style="font-weight:600;border-top:2px solid #ddd;">
+    <td></td>
+    <td>Total</td>
+    <td>${totalHours.toFixed(1)}</td>
+    <td>£${(totalHours * hourlyRate).toFixed(0)}</td>
+    <td></td>
+  </tr></tfoot></table>`;
   container.innerHTML = html;
   
   // Attach expand handlers
