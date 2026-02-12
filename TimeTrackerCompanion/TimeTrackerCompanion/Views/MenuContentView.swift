@@ -124,6 +124,16 @@ struct MenuContentView: View {
             }
             .buttonStyle(.plain)
             .padding(.vertical, 4)
+            
+            Divider()
+            
+            // Version info
+            HStack {
+                Spacer()
+                Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?")")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
         }
         .padding()
         .frame(width: 250)

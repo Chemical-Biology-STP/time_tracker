@@ -33,6 +33,11 @@ brew tap Chemical-Biology-STP/tap
 brew install --cask time-tracker-companion
 ```
 
+If you see "app is damaged" after install, run:
+```bash
+xattr -cr /Applications/TimeTrackerCompanion.app
+```
+
 **Or install manually:**
 1. Download `TimeTrackerCompanion.dmg` from [Releases](https://github.com/Chemical-Biology-STP/time_tracker/releases)
 2. Open the DMG and drag to Applications
@@ -44,6 +49,7 @@ brew install --cask time-tracker-companion
 
 **Update via Homebrew:**
 ```bash
+brew update
 brew upgrade --cask time-tracker-companion
 ```
 

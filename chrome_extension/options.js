@@ -3,6 +3,12 @@
 let groups = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Display extension version
+  const versionEl = document.getElementById('extensionVersion');
+  if (versionEl) {
+    versionEl.textContent = chrome.runtime.getManifest().version;
+  }
+  
   await loadSettings();
   await loadGroups();
   
