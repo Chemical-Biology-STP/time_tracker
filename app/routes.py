@@ -961,8 +961,8 @@ def sync_configure():
         json.dump(config, f, indent=2)
 
     # Test connection
-    from .sync import ProjMgmtSync
     try:
+        from .sync import ProjMgmtSync
         sync = ProjMgmtSync(server_url, email)
         user_info = sync.authenticate()
         flash(f'Connected as {user_info["username"]} ({user_info["role"]}).', 'success')
@@ -989,8 +989,8 @@ def sync_pull_projects():
     with open(config_path) as f:
         config = json.load(f)
 
-    from .sync import ProjMgmtSync
     try:
+        from .sync import ProjMgmtSync
         sync_client = ProjMgmtSync(config['server_url'], config['email'])
         sync_client.authenticate()
         remote_projects = sync_client.pull_projects(include_all=True)
@@ -1092,8 +1092,8 @@ def sync_push():
     # Convert string keys to int
     int_mappings = {int(k): v for k, v in mappings.items()}
 
-    from .sync import ProjMgmtSync
     try:
+        from .sync import ProjMgmtSync
         sync_client = ProjMgmtSync(config['server_url'], config['email'])
         sync_client.authenticate()
         result = sync_client.push_entries(group_id, int_mappings, since_date)
