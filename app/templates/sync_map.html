@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Map Projects — ProjMgmt Sync{% endblock %}
+
+{% block content %}
+<h1>⇄ Map Local Projects → ProjMgmt Projects</h1>
+<p style="color:#666;margin-bottom:20px">
+  Found {{ remote_projects|length }} project(s) on ProjMgmt for {{ config.get('email', '') }}.
+  Map each local project to its corresponding ProjMgmt project.
+</p>
+
+<form method="post" action="{{ url_for('main.sync_save_mappings') }}">
+  <table>
+    <thead>
+      <tr>
+        <th>Local Project</th>
+        <th>Group</th>
+        <th>→ ProjMgmt Project</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for lp in local_projects %}
+      <tr>
+        <td>{{ lp.name }} <small style="color:#999">(ID: {{ lp.id }})</small></td>
+        <td>{{ lp.group.name if lp.group else '—' }}</td>
+        <td>
+          <select name="mapping_{{ lp.id }}" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px">
+            <option value="">— Not mapped —</option>
+            {% for rp in remote_projects %}
+            <option value="{{ rp.id }}" {% if mappings.get(lp.id|string) == rp.id %}selected{% endif %}>
+              Project {{ rp.id }} — {{ rp.state }} {% if rp.scope_description %}({{ rp.scope_description[:50] }}){% endif %} [{{ rp.assignee or 'unassigned' }}]
+            </option>
+            {% endfor %}
+          </select>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if not local_projects %}
+  <div class="empty-state">
+    <p>No local projects found. Create projects under your research groups first.</p>
+  </div>
+  {% endif %}
+
+  {% if remote_projects %}
+  <div style="margin-top:20px">
+    <h3>ProjMgmt Projects Available</h3>
+    <table>
+      <thead><tr><th>ID</th><th>State</th><th>Assignee</th><th>Milestone</th><th>Deadline</th></tr></thead>
+      <tbody>
+        {% for rp in remote_projects %}
+        <tr>
+          <td>{{ rp.id }}</td>
+          <td>{{ rp.state }}</td>
+          <td>{{ rp.assignee or '—' }}</td>
+          <td>{{ rp.current_milestone or '—' }}</td>
+          <td>{{ rp.deadline_date or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <div style="margin-top:20px">
+    <button type="submit">Save Mappings</button>
+    <a href="{{ url_for('main.sync_settings') }}" style="margin-left:15px;color:#666">Cancel</a>
+  </div>
+</form>
+{% endblock %}

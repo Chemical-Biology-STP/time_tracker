@@ -889,3 +889,225 @@ def edit_entry(entry_id):
 
     return render_template('edit_entry.html', entry=entry, group=group,
                           all_groups=all_groups, projects=projects)
+
+
+# ---------------------------------------------------------------------------
+# ProjMgmt Sync Routes
+# ---------------------------------------------------------------------------
+
+
+@bp.route('/sync', methods=['GET'])
+def sync_settings():
+    """Display ProjMgmt sync configuration and status."""
+    import json
+    import os
+
+    config_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        'instance', 'sync_config.json'
+    )
+
+    config = {}
+    if os.path.exists(config_path):
+        with open(config_path) as f:
+            config = json.load(f)
+
+    groups = ResearchGroup.query.all()
+
+    # Load project mappings if they exist
+    mappings_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        'instance', 'sync_mappings.json'
+    )
+    mappings = {}
+    if os.path.exists(mappings_path):
+        with open(mappings_path) as f:
+            mappings = json.load(f)
+
+    return render_template(
+        'sync.html',
+        config=config,
+        groups=groups,
+        mappings=mappings,
+    )
+
+
+@bp.route('/sync/configure', methods=['POST'])
+def sync_configure():
+    """Save ProjMgmt sync configuration."""
+    import json
+    import os
+
+    server_url = request.form.get('server_url', '').strip()
+    email = request.form.get('email', '').strip()
+
+    if not server_url or not email:
+        flash('Server URL and email are required.', 'error')
+        return redirect(url_for('main.sync_settings'))
+
+    config = {
+        'server_url': server_url,
+        'email': email,
+    }
+
+    instance_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        'instance'
+    )
+    os.makedirs(instance_dir, exist_ok=True)
+
+    config_path = os.path.join(instance_dir, 'sync_config.json')
+    with open(config_path, 'w') as f:
+        json.dump(config, f, indent=2)
+
+    # Test connection
+    from .sync import ProjMgmtSync
+    try:
+        sync = ProjMgmtSync(server_url, email)
+        user_info = sync.authenticate()
+        flash(f'Connected as {user_info["username"]} ({user_info["role"]}).', 'success')
+    except Exception as exc:
+        flash(f'Configuration saved but connection failed: {exc}', 'error')
+
+    return redirect(url_for('main.sync_settings'))
+
+
+@bp.route('/sync/pull-projects', methods=['POST'])
+def sync_pull_projects():
+    """Pull projects from ProjMgmt and show them for mapping."""
+    import json
+    import os
+
+    config_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        'instance', 'sync_config.json'
+    )
+    if not os.path.exists(config_path):
+        flash('Configure sync settings first.', 'error')
+        return redirect(url_for('main.sync_settings'))
+
+    with open(config_path) as f:
+        config = json.load(f)
+
+    from .sync import ProjMgmtSync
+    try:
+        sync_client = ProjMgmtSync(config['server_url'], config['email'])
+        sync_client.authenticate()
+        remote_projects = sync_client.pull_projects(include_all=True)
+    except Exception as exc:
+        flash(f'Failed to pull projects: {exc}', 'error')
+        return redirect(url_for('main.sync_settings'))
+
+    # Store remote projects in session for the mapping step
+    from flask import session
+    session['remote_projects'] = remote_projects
+
+    groups = ResearchGroup.query.all()
+    local_projects = Project.query.filter_by(archived=False).all()
+
+    # Load existing mappings
+    mappings_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        'instance', 'sync_mappings.json'
+    )
+    mappings = {}
+    if os.path.exists(mappings_path):
+        with open(mappings_path) as f:
+            mappings = json.load(f)
+
+    return render_template(
+        'sync_map.html',
+        remote_projects=remote_projects,
+        local_projects=local_projects,
+        groups=groups,
+        mappings=mappings,
+        config=config,
+    )
+
+
+@bp.route('/sync/save-mappings', methods=['POST'])
+def sync_save_mappings():
+    """Save project mappings (local project ID -> ProjMgmt project ID)."""
+    import json
+    import os
+
+    mappings = {}
+    for key, value in request.form.items():
+        if key.startswith('mapping_') and value:
+            local_project_id = key.replace('mapping_', '')
+            mappings[local_project_id] = int(value)
+
+    instance_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        'instance'
+    )
+    os.makedirs(instance_dir, exist_ok=True)
+
+    mappings_path = os.path.join(instance_dir, 'sync_mappings.json')
+    with open(mappings_path, 'w') as f:
+        json.dump(mappings, f, indent=2)
+
+    flash(f'{len(mappings)} project mapping(s) saved.', 'success')
+    return redirect(url_for('main.sync_settings'))
+
+
+@bp.route('/sync/push', methods=['POST'])
+def sync_push():
+    """Push time entries from a local group to ProjMgmt."""
+    import json
+    import os
+
+    group_id = request.form.get('group_id', type=int)
+    since_date = request.form.get('since_date', '').strip() or None
+
+    if not group_id:
+        flash('Select a research group to sync.', 'error')
+        return redirect(url_for('main.sync_settings'))
+
+    config_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        'instance', 'sync_config.json'
+    )
+    mappings_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        'instance', 'sync_mappings.json'
+    )
+
+    if not os.path.exists(config_path):
+        flash('Configure sync settings first.', 'error')
+        return redirect(url_for('main.sync_settings'))
+
+    with open(config_path) as f:
+        config = json.load(f)
+
+    mappings = {}
+    if os.path.exists(mappings_path):
+        with open(mappings_path) as f:
+            mappings = json.load(f)
+
+    if not mappings:
+        flash('No project mappings configured. Map your local projects to ProjMgmt projects first.', 'error')
+        return redirect(url_for('main.sync_settings'))
+
+    # Convert string keys to int
+    int_mappings = {int(k): v for k, v in mappings.items()}
+
+    from .sync import ProjMgmtSync
+    try:
+        sync_client = ProjMgmtSync(config['server_url'], config['email'])
+        sync_client.authenticate()
+        result = sync_client.push_entries(group_id, int_mappings, since_date)
+    except Exception as exc:
+        flash(f'Sync failed: {exc}', 'error')
+        return redirect(url_for('main.sync_settings'))
+
+    created = result.get('created', 0)
+    skipped = result.get('skipped', 0)
+    errors = result.get('errors', [])
+
+    msg = f'Sync complete: {created} entries pushed, {skipped} skipped.'
+    if errors:
+        msg += f' {len(errors)} error(s).'
+    flash(msg, 'success' if not errors else 'warning')
+
+    return redirect(url_for('main.sync_settings'))
