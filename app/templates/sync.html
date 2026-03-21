@@ -3,61 +3,116 @@
 
 {% block content %}
 <h1>⇄ ProjMgmt Sync</h1>
-<p style="color:#666;margin-bottom:20px">Sync your local time entries with the Project Management Portal.</p>
+<p style="color:#666;margin-bottom:20px">Bidirectional sync between Time Tracker and ProjMgmt.</p>
 
 <!-- Connection Settings -->
 <div class="summary-box">
   <h3>Connection Settings</h3>
   <form method="post" action="{{ url_for('main.sync_configure') }}">
     <label for="server_url">ProjMgmt Server URL</label>
-    <input type="url" name="server_url" id="server_url" value="{{ config.get('server_url', 'http://10.0.208.117:8009') }}" placeholder="http://10.0.208.117:8009" required>
+    <input type="url" name="server_url" id="server_url"
+           value="{{ config.get('server_url', 'http://10.0.208.117:8009') }}"
+           placeholder="http://10.0.208.117:8009" required>
 
     <label for="email">Your Email (registered in ProjMgmt)</label>
-    <input type="email" name="email" id="email" value="{{ config.get('email', '') }}" placeholder="user@crick.ac.uk" required>
+    <input type="email" name="email" id="email"
+           value="{{ config.get('email', '') }}"
+           placeholder="user@crick.ac.uk" required>
 
     <button type="submit">Save &amp; Test Connection</button>
   </form>
 </div>
 
 {% if config.get('email') %}
-<!-- Project Mapping -->
-<div class="summary-box">
-  <h3>Project Mapping</h3>
-  <p style="color:#666;margin-bottom:15px">Map your local projects to ProjMgmt projects so time entries sync to the right place.</p>
-  <form method="post" action="{{ url_for('main.sync_pull_projects') }}">
-    <button type="submit">Pull ProjMgmt Projects &amp; Configure Mappings</button>
-  </form>
 
-  {% if mappings %}
-  <table style="margin-top:15px">
-    <thead><tr><th>Local Project ID</th><th>→ ProjMgmt Project ID</th></tr></thead>
-    <tbody>
-      {% for local_id, remote_id in mappings.items() %}
-      <tr><td>{{ local_id }}</td><td>{{ remote_id }}</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<!-- Initial Sync -->
+{% if not config.get('initial_sync_done') %}
+<div class="summary-box" style="border-left:4px solid #f0ad4e">
+  <h3>Step 1: Initial Sync</h3>
+  <p style="color:#666;margin-bottom:15px">
+    Push all your existing labs, projects, and time logs to ProjMgmt.
+    This only needs to be done once.
+  </p>
+  <form method="post" action="{{ url_for('main.sync_initial_push') }}">
+    <button type="submit" style="background:#f0ad4e;border-color:#eea236">
+      Push Everything to ProjMgmt
+    </button>
+  </form>
+</div>
+{% endif %}
+
+<!-- Sync Actions -->
+<div class="summary-box">
+  <h3>Sync Actions</h3>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px">
+    <!-- Full Sync -->
+    <form method="post" action="{{ url_for('main.sync_full') }}" style="margin:0">
+      <button type="submit" style="background:#5cb85c;border-color:#4cae4c">
+        ⇄ Full Sync Now
+      </button>
+    </form>
+
+    <!-- Pull Only -->
+    <form method="post" action="{{ url_for('main.sync_pull') }}" style="margin:0">
+      <button type="submit" style="background:#5bc0de;border-color:#46b8da">
+        ↓ Pull Labs &amp; Tasks
+      </button>
+    </form>
+
+    <!-- Push Only -->
+    <form method="post" action="{{ url_for('main.sync_push') }}" style="margin:0">
+      <input type="hidden" name="since_date" value="">
+      <button type="submit" style="background:#337ab7;border-color:#2e6da4;color:#fff">
+        ↑ Push Time Logs
+      </button>
+    </form>
+  </div>
+
+  <p style="color:#888;font-size:0.9em">
+    <strong>Full Sync</strong> = pull new labs/projects/tasks from ProjMgmt + push your time logs back.<br>
+    <strong>Pull</strong> = only fetch new labs, projects, and tasks.<br>
+    <strong>Push</strong> = only send your time logs to ProjMgmt.
+  </p>
+
+  {% if config.get('last_sync') %}
+  <p style="color:#888;font-size:0.85em;margin-top:10px">
+    Last sync: {{ config.get('last_sync') }}
+  </p>
   {% endif %}
 </div>
 
-<!-- Push Time Entries -->
+<!-- Auto-Sync -->
 <div class="summary-box">
-  <h3>Push Time Entries</h3>
-  <p style="color:#666;margin-bottom:15px">Send your local time entries to ProjMgmt. Only entries with mapped projects will be synced.</p>
-  <form method="post" action="{{ url_for('main.sync_push') }}">
-    <label for="group_id">Research Group</label>
-    <select name="group_id" id="group_id" style="width:100%;padding:8px;margin-bottom:15px;border:1px solid #ddd;border-radius:4px" required>
-      <option value="">Select a group…</option>
-      {% for g in groups %}
-      <option value="{{ g.id }}">{{ g.name }}</option>
-      {% endfor %}
-    </select>
-
-    <label for="since_date">Since Date (optional — leave blank for all)</label>
-    <input type="date" name="since_date" id="since_date">
-
-    <button type="submit">Push to ProjMgmt</button>
+  <h3>Auto-Sync</h3>
+  <p style="color:#666;margin-bottom:15px">
+    When enabled, a full sync runs automatically every 5 minutes in the background.
+  </p>
+  <form method="post" action="{{ url_for('main.sync_toggle_auto') }}">
+    {% if config.get('auto_sync') %}
+    <span style="color:#5cb85c;font-weight:bold">● Enabled</span>
+    <button type="submit" style="margin-left:10px;background:#d9534f;border-color:#d43f3a">
+      Disable Auto-Sync
+    </button>
+    {% else %}
+    <span style="color:#999">○ Disabled</span>
+    <button type="submit" style="margin-left:10px;background:#5cb85c;border-color:#4cae4c">
+      Enable Auto-Sync
+    </button>
+    {% endif %}
   </form>
 </div>
+
+<!-- Push with date filter -->
+<div class="summary-box">
+  <h3>Push Time Logs (with filter)</h3>
+  <p style="color:#666;margin-bottom:15px">Push only entries since a specific date.</p>
+  <form method="post" action="{{ url_for('main.sync_push') }}">
+    <label for="since_date">Since Date (optional)</label>
+    <input type="date" name="since_date" id="since_date">
+    <button type="submit">Push Filtered</button>
+  </form>
+</div>
+
 {% endif %}
 {% endblock %}

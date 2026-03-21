@@ -1,15 +1,19 @@
-"""ProjMgmt sync module — pull projects and push time entries to the server.
+"""Bidirectional sync between Time Tracker and ProjMgmt.
 
-Usage from the Time Tracker app:
-    sync = ProjMgmtSync("http://10.0.208.117:8009", "user@crick.ac.uk")
-    sync.authenticate()
-    projects = sync.pull_projects()
-    sync.push_entries(group_id, project_mapping)
+Structure (labs, projects, tasks) flows ProjMgmt → Time Tracker.
+Time logs flow Time Tracker → ProjMgmt.
+
+Auto-sync runs every 5 minutes via a background thread.
+Manual sync is triggered from the /sync page.
 """
 
 from __future__ import annotations
 
+import json
 import logging
+import os
+import threading
+import time
 from datetime import datetime
 
 import requests
@@ -18,24 +22,59 @@ from .models import db, ResearchGroup, Project, TimeEntry
 
 logger = logging.getLogger(__name__)
 
-# Default ProjMgmt server URL
 DEFAULT_PROJMGMT_URL = "http://10.0.208.117:8009"
+SYNC_INTERVAL_SECONDS = 300  # 5 minutes
 
+
+# ---------------------------------------------------------------------------
+# Config helpers
+# ---------------------------------------------------------------------------
+
+def _instance_dir() -> str:
+    return os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "instance",
+    )
+
+
+def _config_path() -> str:
+    return os.path.join(_instance_dir(), "sync_config.json")
+
+
+def _load_config() -> dict:
+    path = _config_path()
+    if os.path.exists(path):
+        with open(path) as f:
+            return json.load(f)
+    return {}
+
+
+def _save_config(config: dict) -> None:
+    d = _instance_dir()
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, "sync_config.json"), "w") as f:
+        json.dump(config, f, indent=2)
+
+
+# ---------------------------------------------------------------------------
+# ProjMgmtSync client
+# ---------------------------------------------------------------------------
 
 class ProjMgmtSync:
-    """Handles bidirectional sync between local Time Tracker and ProjMgmt server."""
+    """Handles bidirectional sync with the ProjMgmt server."""
 
     def __init__(self, server_url: str = DEFAULT_PROJMGMT_URL, email: str = ""):
         self.server_url = server_url.rstrip("/")
         self.email = email
         self.user_info: dict | None = None
 
-    def authenticate(self) -> dict:
-        """Authenticate with ProjMgmt and store user info.
+    def _headers(self) -> dict:
+        return {"X-Sync-Email": self.email}
 
-        Returns user info dict on success.
-        Raises ConnectionError or ValueError on failure.
-        """
+    # -- Auth ---------------------------------------------------------------
+
+    def authenticate(self) -> dict:
+        """Authenticate with ProjMgmt. Returns user info dict."""
         try:
             resp = requests.post(
                 f"{self.server_url}/sync/auth",
@@ -53,94 +92,187 @@ class ProjMgmtSync:
         self.user_info = resp.json()
         return self.user_info
 
-    def _headers(self) -> dict:
-        return {"X-Sync-Email": self.email}
+    # -- Initial push (Time Tracker → ProjMgmt) ----------------------------
 
-    def pull_projects(self, include_all: bool = False) -> list[dict]:
-        """Pull the user's projects from ProjMgmt.
+    def push_initial(self) -> dict:
+        """Push all local labs, projects, and time logs to ProjMgmt."""
+        groups = ResearchGroup.query.all()
 
-        Returns a list of project dicts with id, state, milestone, etc.
-        """
-        params = {}
-        if include_all:
-            params["all"] = "true"
+        labs_payload = []
+        for g in groups:
+            projects = Project.query.filter_by(research_group_id=g.id).all()
+            labs_payload.append({
+                "id": g.id,
+                "name": g.name,
+                "manager_name": g.manager_name,
+                "projects": [
+                    {"id": p.id, "name": p.name, "archived": p.archived}
+                    for p in projects
+                ],
+            })
 
-        resp = requests.get(
-            f"{self.server_url}/sync/projects",
+        entries = TimeEntry.query.all()
+        logs_payload = []
+        for e in entries:
+            logs_payload.append({
+                "entry_id": e.id,
+                "group_id": e.research_group_id,
+                "project_id": e.project_id,
+                "date": e.date.isoformat(),
+                "task_description": e.task_description,
+                "total_hours": e.total_hours,
+            })
+
+        resp = requests.post(
+            f"{self.server_url}/sync/initial",
             headers=self._headers(),
-            params=params,
-            timeout=10,
+            json={"labs": labs_payload, "time_logs": logs_payload},
+            timeout=30,
         )
-        if resp.status_code != 200:
-            raise ValueError(f"Failed to pull projects: {resp.text}")
+        if resp.status_code not in (200, 201):
+            raise ValueError(f"Initial push failed: {resp.text}")
 
         return resp.json()
 
-    def push_entries(
-        self,
-        group_id: int,
-        project_mapping: dict[int, int],
-        since_date: str | None = None,
-    ) -> dict:
-        """Push local time entries to ProjMgmt.
+    # -- Pull structure (ProjMgmt → Time Tracker) --------------------------
 
-        Args:
-            group_id: Local research group ID to sync from.
-            project_mapping: Maps local Project.id -> ProjMgmt project ID.
-            since_date: Only push entries on or after this date (YYYY-MM-DD).
+    def pull_structure(self) -> dict:
+        """Pull labs and projects from ProjMgmt, create locally if missing.
 
-        Returns dict with created/skipped/errors counts.
+        Returns counts of created labs/projects.
         """
-        query = TimeEntry.query.filter_by(research_group_id=group_id)
+        resp = requests.get(
+            f"{self.server_url}/sync/labs",
+            headers=self._headers(),
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            raise ValueError(f"Failed to pull labs: {resp.text}")
 
+        remote_labs = resp.json()
+        labs_created = 0
+        projects_created = 0
+
+        for lab_data in remote_labs:
+            remote_lab_id = lab_data["id"]
+            lab_name = lab_data["name"]
+            manager = lab_data.get("manager_name", "")
+
+            # Find local group by name (best match)
+            local_group = ResearchGroup.query.filter_by(name=lab_name).first()
+            if not local_group:
+                local_group = ResearchGroup(
+                    name=lab_name,
+                    manager_name=manager or "",
+                    project_name="",
+                )
+                db.session.add(local_group)
+                db.session.flush()
+                labs_created += 1
+
+            for proj_data in lab_data.get("projects", []):
+                proj_name = proj_data["name"]
+                # Check if project already exists locally under this group
+                local_proj = Project.query.filter_by(
+                    name=proj_name, research_group_id=local_group.id
+                ).first()
+                if not local_proj:
+                    local_proj = Project(
+                        name=proj_name,
+                        research_group_id=local_group.id,
+                        archived=proj_data.get("archived", False),
+                    )
+                    db.session.add(local_proj)
+                    projects_created += 1
+
+        db.session.commit()
+        return {"labs_created": labs_created, "projects_created": projects_created}
+
+    # -- Pull tasks (ProjMgmt → Time Tracker) ------------------------------
+
+    def pull_tasks(self) -> dict:
+        """Pull ProjMgmt tasks assigned to the user, create as local projects.
+
+        Returns count of tasks pulled.
+        """
+        resp = requests.get(
+            f"{self.server_url}/sync/tasks",
+            headers=self._headers(),
+            params={"all": "true"},
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            raise ValueError(f"Failed to pull tasks: {resp.text}")
+
+        tasks = resp.json()
+        tasks_created = 0
+
+        # Put ProjMgmt tasks under a dedicated local group
+        pm_group = ResearchGroup.query.filter_by(name="ProjMgmt Tasks").first()
+        if not pm_group and tasks:
+            pm_group = ResearchGroup(
+                name="ProjMgmt Tasks",
+                manager_name="ProjMgmt",
+                project_name="",
+            )
+            db.session.add(pm_group)
+            db.session.flush()
+
+        for task in tasks:
+            task_name = f"PM-{task['id']}: {task.get('scope_description', 'Task')[:80]}"
+            existing = Project.query.filter_by(
+                name=task_name, research_group_id=pm_group.id
+            ).first()
+            if not existing:
+                proj = Project(
+                    name=task_name,
+                    research_group_id=pm_group.id,
+                    archived=task.get("state") in ("delivered", "closed", "parked"),
+                )
+                db.session.add(proj)
+                tasks_created += 1
+
+        db.session.commit()
+        return {"tasks_created": tasks_created}
+
+    # -- Push time logs (Time Tracker → ProjMgmt) --------------------------
+
+    def push_time_logs(self, since_date: str | None = None) -> dict:
+        """Push all local time entries to ProjMgmt as time logs.
+
+        Returns counts of created/updated/skipped/errors.
+        """
+        query = TimeEntry.query
         if since_date:
-            from datetime import date as date_cls
             try:
+                from datetime import date as date_cls
                 cutoff = date_cls.fromisoformat(since_date)
                 query = query.filter(TimeEntry.date >= cutoff)
             except ValueError:
                 pass
 
-        local_entries = query.order_by(TimeEntry.date.asc()).all()
+        entries = query.order_by(TimeEntry.date.asc()).all()
 
-        payload_entries = []
-        for entry in local_entries:
-            # Map local project to ProjMgmt project
-            remote_project_id = None
-            if entry.project_id and entry.project_id in project_mapping:
-                remote_project_id = project_mapping[entry.project_id]
-            elif entry.project_id:
-                # Skip entries whose project isn't mapped
+        payload = []
+        for e in entries:
+            if not e.project_id:
                 continue
-            else:
-                # No project assigned locally — skip
-                continue
-
-            # Build start/end times from time blocks
-            blocks = entry.get_sorted_time_blocks()
-            started_at = None
-            ended_at = None
-            if blocks:
-                started_at = datetime.combine(entry.date, blocks[0].start_time).isoformat()
-                ended_at = datetime.combine(entry.date, blocks[-1].end_time).isoformat()
-
-            payload_entries.append({
-                "project_id": remote_project_id,
-                "date": entry.date.isoformat(),
-                "description": entry.task_description,
-                "duration_minutes": int(entry.total_hours * 60),
-                "started_at": started_at,
-                "ended_at": ended_at,
-                "external_id": f"tt-{entry.id}",
+            payload.append({
+                "entry_id": e.id,
+                "group_id": e.research_group_id,
+                "project_id": e.project_id,
+                "date": e.date.isoformat(),
+                "task_description": e.task_description,
+                "total_hours": e.total_hours,
             })
 
-        if not payload_entries:
-            return {"created": 0, "skipped": 0, "errors": ["No mapped entries to push"]}
+        if not payload:
+            return {"created": 0, "updated": 0, "skipped": 0, "errors": ["No entries to push"]}
 
         resp = requests.post(
-            f"{self.server_url}/sync/time-entries",
+            f"{self.server_url}/sync/time-logs",
             headers=self._headers(),
-            json={"entries": payload_entries},
+            json={"entries": payload},
             timeout=30,
         )
         if resp.status_code not in (200, 201):
@@ -148,21 +280,161 @@ class ProjMgmtSync:
 
         return resp.json()
 
-    def pull_time_entries(self, project_id: int | None = None, since: str | None = None) -> list[dict]:
-        """Pull time entries from ProjMgmt for the authenticated user."""
+    # -- Pull changes (ProjMgmt → Time Tracker) ----------------------------
+
+    def pull_changes(self, since: str | None = None) -> dict:
+        """Pull changes from ProjMgmt since a given timestamp.
+
+        Creates new local groups/projects as needed.
+        Returns summary of what was synced.
+        """
         params = {}
-        if project_id:
-            params["project_id"] = project_id
         if since:
             params["since"] = since
 
         resp = requests.get(
-            f"{self.server_url}/sync/time-entries",
+            f"{self.server_url}/sync/changes",
             headers=self._headers(),
             params=params,
             timeout=10,
         )
         if resp.status_code != 200:
-            raise ValueError(f"Failed to pull time entries: {resp.text}")
+            raise ValueError(f"Failed to pull changes: {resp.text}")
 
-        return resp.json()
+        data = resp.json()
+        labs_created = 0
+        projects_created = 0
+
+        # Process new labs
+        for lab_data in data.get("labs", []):
+            lab_name = lab_data["name"]
+            local_group = ResearchGroup.query.filter_by(name=lab_name).first()
+            if not local_group:
+                local_group = ResearchGroup(
+                    name=lab_name,
+                    manager_name=lab_data.get("manager_name", ""),
+                    project_name="",
+                )
+                db.session.add(local_group)
+                db.session.flush()
+                labs_created += 1
+
+            for proj_data in lab_data.get("projects", []):
+                proj_name = proj_data["name"]
+                if not Project.query.filter_by(name=proj_name, research_group_id=local_group.id).first():
+                    db.session.add(Project(
+                        name=proj_name,
+                        research_group_id=local_group.id,
+                        archived=proj_data.get("archived", False),
+                    ))
+                    projects_created += 1
+
+        # Process new standalone projects
+        for proj_data in data.get("projects", []):
+            lab_name = proj_data.get("lab_name", "Unknown Lab")
+            local_group = ResearchGroup.query.filter_by(name=lab_name).first()
+            if not local_group:
+                local_group = ResearchGroup(
+                    name=lab_name, manager_name="", project_name=""
+                )
+                db.session.add(local_group)
+                db.session.flush()
+                labs_created += 1
+
+            proj_name = proj_data["name"]
+            if not Project.query.filter_by(name=proj_name, research_group_id=local_group.id).first():
+                db.session.add(Project(
+                    name=proj_name,
+                    research_group_id=local_group.id,
+                    archived=proj_data.get("archived", False),
+                ))
+                projects_created += 1
+
+        db.session.commit()
+
+        server_time = data.get("server_time")
+        return {
+            "labs_created": labs_created,
+            "projects_created": projects_created,
+            "tasks": len(data.get("tasks", [])),
+            "server_time": server_time,
+        }
+
+    # -- Full sync (convenience) -------------------------------------------
+
+    def full_sync(self, since: str | None = None) -> dict:
+        """Run a full bidirectional sync cycle.
+
+        1. Pull structure + changes from ProjMgmt
+        2. Push time logs to ProjMgmt
+        """
+        self.authenticate()
+
+        pull_result = self.pull_changes(since)
+        push_result = self.push_time_logs()
+
+        return {
+            "pull": pull_result,
+            "push": push_result,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Background auto-sync
+# ---------------------------------------------------------------------------
+
+_sync_thread: threading.Thread | None = None
+_sync_stop_event = threading.Event()
+
+
+def _auto_sync_loop(app):
+    """Background loop that runs full_sync every SYNC_INTERVAL_SECONDS."""
+    logger.info("Auto-sync thread started (interval=%ds)", SYNC_INTERVAL_SECONDS)
+
+    while not _sync_stop_event.is_set():
+        config = _load_config()
+        server_url = config.get("server_url")
+        email = config.get("email")
+        last_sync = config.get("last_sync")
+
+        if server_url and email:
+            try:
+                with app.app_context():
+                    sync_client = ProjMgmtSync(server_url, email)
+                    result = sync_client.full_sync(since=last_sync)
+
+                    # Update last_sync timestamp
+                    server_time = result.get("pull", {}).get("server_time")
+                    if server_time:
+                        config["last_sync"] = server_time
+                        _save_config(config)
+
+                    logger.info("Auto-sync completed: %s", result)
+            except Exception:
+                logger.exception("Auto-sync failed")
+        else:
+            logger.debug("Auto-sync skipped — no config")
+
+        _sync_stop_event.wait(SYNC_INTERVAL_SECONDS)
+
+    logger.info("Auto-sync thread stopped")
+
+
+def start_auto_sync(app):
+    """Start the background auto-sync thread."""
+    global _sync_thread
+    if _sync_thread and _sync_thread.is_alive():
+        return  # already running
+
+    _sync_stop_event.clear()
+    _sync_thread = threading.Thread(
+        target=_auto_sync_loop, args=(app,), daemon=True, name="projmgmt-sync"
+    )
+    _sync_thread.start()
+
+
+def stop_auto_sync():
+    """Stop the background auto-sync thread."""
+    _sync_stop_event.set()
+    if _sync_thread:
+        _sync_thread.join(timeout=5)

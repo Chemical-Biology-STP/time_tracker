@@ -45,4 +45,13 @@ def create_app(config=None):
     from . import api
     app.register_blueprint(api.api_bp)
 
+    # Start auto-sync if configured
+    try:
+        from .sync import _load_config, start_auto_sync
+        sync_config = _load_config()
+        if sync_config.get('auto_sync') and sync_config.get('server_url') and sync_config.get('email'):
+            start_auto_sync(app)
+    except Exception:
+        pass  # sync module may not be available (missing requests)
+
     return app
