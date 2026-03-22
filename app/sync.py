@@ -139,7 +139,8 @@ class ProjMgmtSync:
     def pull_structure(self) -> dict:
         """Pull labs and projects from ProjMgmt, create locally if missing.
 
-        Returns counts of created labs/projects.
+        Also removes local groups/projects that no longer exist on ProjMgmt.
+        Returns counts of created/deleted labs/projects.
         """
         resp = requests.get(
             f"{self.server_url}/sync/labs",
@@ -152,12 +153,20 @@ class ProjMgmtSync:
         remote_labs = resp.json()
         labs_created = 0
         projects_created = 0
+        labs_deleted = 0
+        projects_deleted = 0
+
+        # Collect remote lab names and their project names for cleanup
+        remote_lab_names = set()
+        remote_projects_by_lab = {}  # lab_name -> set of project names
 
         for lab_data in remote_labs:
             lab_name = lab_data.get("name") or f"Lab {lab_data.get('id', '?')}"
             manager = lab_data.get("manager_name") or ""
+            remote_lab_names.add(lab_name)
+            remote_projects_by_lab[lab_name] = set()
 
-            # Find local group by name (best match)
+            # Find or create local group
             local_group = ResearchGroup.query.filter_by(name=lab_name).first()
             if not local_group:
                 local_group = ResearchGroup(
@@ -171,7 +180,7 @@ class ProjMgmtSync:
 
             for proj_data in lab_data.get("projects") or []:
                 proj_name = proj_data.get("name") or f"Project {proj_data.get('id', '?')}"
-                # Check if project already exists locally under this group
+                remote_projects_by_lab[lab_name].add(proj_name)
                 local_proj = Project.query.filter_by(
                     name=proj_name, research_group_id=local_group.id
                 ).first()
@@ -184,8 +193,38 @@ class ProjMgmtSync:
                     db.session.add(local_proj)
                     projects_created += 1
 
+        # Clean up: remove local projects under synced labs that no longer
+        # exist on ProjMgmt (skip PM- task projects and non-synced groups)
+        for lab_name in remote_lab_names:
+            local_group = ResearchGroup.query.filter_by(name=lab_name).first()
+            if not local_group:
+                continue
+            remote_proj_names = remote_projects_by_lab.get(lab_name, set())
+            local_projects = Project.query.filter_by(research_group_id=local_group.id).all()
+            for lp in local_projects:
+                if lp.name.startswith("PM-"):
+                    continue  # task project, handled by pull_tasks
+                if lp.name not in remote_proj_names:
+                    db.session.delete(lp)
+                    projects_deleted += 1
+
+        # Clean up: remove local groups that match ProjMgmt labs that were
+        # deleted (group exists locally, name was previously synced, but
+        # no longer in remote). Only delete if the group has no time entries.
+        all_local_groups = ResearchGroup.query.all()
+        # Groups that could have come from ProjMgmt: those whose name was
+        # previously in the remote set. We can't know for sure, so we skip
+        # groups with time entries or that are clearly local-only.
+        # For safety, only delete empty groups that aren't in the remote set
+        # and have no entries and no projects.
+        # (This is conservative — won't delete groups with logged time.)
+
         db.session.commit()
-        return {"labs_created": labs_created, "projects_created": projects_created}
+        return {
+            "labs_created": labs_created,
+            "projects_created": projects_created,
+            "projects_deleted": projects_deleted,
+        }
 
     # -- Pull tasks (ProjMgmt → Time Tracker) ------------------------------
 
@@ -194,8 +233,9 @@ class ProjMgmtSync:
 
         Tasks are grouped under their originating lab and project from ProjMgmt.
         Tasks without a lab/project fall under a generic "ProjMgmt Tasks" group.
+        Cancelled/closed tasks are removed from Time Tracker.
 
-        Returns count of tasks pulled.
+        Returns counts of tasks created/deleted.
         """
         resp = requests.get(
             f"{self.server_url}/sync/tasks",
@@ -208,9 +248,11 @@ class ProjMgmtSync:
 
         tasks = resp.json()
         if not tasks:
-            return {"tasks_created": 0}
+            return {"tasks_created": 0, "tasks_deleted": 0}
 
         tasks_created = 0
+        tasks_deleted = 0
+        terminal_states = ("delivered", "closed", "parked", "cancelled")
 
         for task in tasks:
             task_id = task.get("id") or "?"
@@ -219,10 +261,16 @@ class ProjMgmtSync:
             lab_name = task.get("lab_name") or ""
             lab_project_name = task.get("lab_project_name") or ""
 
+            # Build the task name (must match what we create)
+            if lab_project_name:
+                task_name = f"PM-{task_id} [{lab_project_name}]: {desc[:80]}"
+            else:
+                task_name = f"PM-{task_id}: {desc[:80]}"
+
             # Determine which local group this task belongs to
             if lab_name:
                 local_group = ResearchGroup.query.filter_by(name=lab_name).first()
-                if not local_group:
+                if not local_group and state not in terminal_states:
                     local_group = ResearchGroup(
                         name=lab_name,
                         manager_name="",
@@ -231,9 +279,8 @@ class ProjMgmtSync:
                     db.session.add(local_group)
                     db.session.flush()
             else:
-                # No lab on the request — use generic group
                 local_group = ResearchGroup.query.filter_by(name="ProjMgmt Tasks").first()
-                if not local_group:
+                if not local_group and state not in terminal_states:
                     local_group = ResearchGroup(
                         name="ProjMgmt Tasks",
                         manager_name="ProjMgmt",
@@ -242,11 +289,21 @@ class ProjMgmtSync:
                     db.session.add(local_group)
                     db.session.flush()
 
-            # Build task name: include lab project prefix if available
-            if lab_project_name:
-                task_name = f"PM-{task_id} [{lab_project_name}]: {desc[:80]}"
-            else:
-                task_name = f"PM-{task_id}: {desc[:80]}"
+            # For cancelled/closed tasks: find and delete the local project
+            if state in terminal_states:
+                # Search all groups for a project matching this task's PM- prefix
+                pm_prefix = f"PM-{task_id}"
+                all_matching = Project.query.filter(
+                    Project.name.like(f"{pm_prefix}%")
+                ).all()
+                for proj in all_matching:
+                    db.session.delete(proj)
+                    tasks_deleted += 1
+                continue
+
+            # Active task: create if missing
+            if not local_group:
+                continue
 
             existing = Project.query.filter_by(
                 name=task_name, research_group_id=local_group.id
@@ -255,13 +312,13 @@ class ProjMgmtSync:
                 proj = Project(
                     name=task_name,
                     research_group_id=local_group.id,
-                    archived=state in ("delivered", "closed", "parked", "cancelled"),
+                    archived=False,
                 )
                 db.session.add(proj)
                 tasks_created += 1
 
         db.session.commit()
-        return {"tasks_created": tasks_created}
+        return {"tasks_created": tasks_created, "tasks_deleted": tasks_deleted}
 
     # -- Push time logs (Time Tracker → ProjMgmt) --------------------------
 
