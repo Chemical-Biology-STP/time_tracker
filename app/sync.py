@@ -156,7 +156,11 @@ class ProjMgmtSync:
         labs_deleted = 0
         projects_deleted = 0
 
-        # Collect remote lab names and their project names for cleanup
+        # Load previously synced lab names so we can detect deletions
+        config = _load_config()
+        previously_synced_labs = set(config.get("synced_lab_names", []))
+
+        # Collect remote lab names and their project names
         remote_lab_names = set()
         remote_projects_by_lab = {}  # lab_name -> set of project names
 
@@ -193,8 +197,8 @@ class ProjMgmtSync:
                     db.session.add(local_proj)
                     projects_created += 1
 
-        # Clean up: remove local projects under synced labs that no longer
-        # exist on ProjMgmt (skip PM- task projects and non-synced groups)
+        # Clean up projects: remove local projects under synced labs that
+        # no longer exist on ProjMgmt (skip PM- task projects)
         for lab_name in remote_lab_names:
             local_group = ResearchGroup.query.filter_by(name=lab_name).first()
             if not local_group:
@@ -208,21 +212,31 @@ class ProjMgmtSync:
                     db.session.delete(lp)
                     projects_deleted += 1
 
-        # Clean up: remove local groups that match ProjMgmt labs that were
-        # deleted (group exists locally, name was previously synced, but
-        # no longer in remote). Only delete if the group has no time entries.
-        all_local_groups = ResearchGroup.query.all()
-        # Groups that could have come from ProjMgmt: those whose name was
-        # previously in the remote set. We can't know for sure, so we skip
-        # groups with time entries or that are clearly local-only.
-        # For safety, only delete empty groups that aren't in the remote set
-        # and have no entries and no projects.
-        # (This is conservative — won't delete groups with logged time.)
+        # Clean up labs: remove local groups that were previously synced
+        # from ProjMgmt but no longer exist in the remote set
+        deleted_lab_names = previously_synced_labs - remote_lab_names
+        for lab_name in deleted_lab_names:
+            local_group = ResearchGroup.query.filter_by(name=lab_name).first()
+            if not local_group:
+                continue
+            # Delete all non-PM projects under this group first
+            local_projects = Project.query.filter_by(research_group_id=local_group.id).all()
+            for lp in local_projects:
+                db.session.delete(lp)
+                projects_deleted += 1
+            # Delete the group itself
+            db.session.delete(local_group)
+            labs_deleted += 1
+
+        # Save the current set of synced lab names for next time
+        config["synced_lab_names"] = sorted(remote_lab_names)
+        _save_config(config)
 
         db.session.commit()
         return {
             "labs_created": labs_created,
             "projects_created": projects_created,
+            "labs_deleted": labs_deleted,
             "projects_deleted": projects_deleted,
         }
 

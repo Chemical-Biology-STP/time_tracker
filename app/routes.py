@@ -992,6 +992,7 @@ def sync_pull():
         flash(
             f'Pull complete: {struct_result.get("labs_created", 0)} new labs, '
             f'{struct_result.get("projects_created", 0)} new projects, '
+            f'{struct_result.get("labs_deleted", 0)} labs removed, '
             f'{struct_result.get("projects_deleted", 0)} projects removed, '
             f'{task_result.get("tasks_created", 0)} new tasks, '
             f'{task_result.get("tasks_deleted", 0)} tasks removed.',
