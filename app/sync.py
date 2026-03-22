@@ -219,7 +219,8 @@ class ProjMgmtSync:
             db.session.flush()
 
         for task in tasks:
-            task_name = f"PM-{task['id']}: {task.get('scope_description', 'Task')[:80]}"
+            desc = task.get('scope_description') or 'Task'
+            task_name = f"PM-{task['id']}: {desc[:80]}"
             existing = Project.query.filter_by(
                 name=task_name, research_group_id=pm_group.id
             ).first()
