@@ -243,11 +243,11 @@ class ProjMgmtSync:
     # -- Pull tasks (ProjMgmt → Time Tracker) ------------------------------
 
     def pull_tasks(self) -> dict:
-        """Pull ProjMgmt tasks assigned to the user, create as local projects.
+        """Pull ProjMgmt subtasks assigned to the user, create as local projects.
 
-        Tasks are grouped under their originating lab and project from ProjMgmt.
-        Tasks without a lab/project fall under a generic "ProjMgmt Tasks" group.
-        Cancelled/closed tasks are removed from Time Tracker.
+        Subtasks are placed under their originating lab project in Time Tracker.
+        Each subtask becomes a Time Tracker project named "PM-{task_id}.{subtask_id}: {title}".
+        Cancelled/closed parent tasks have their subtask projects removed.
 
         Returns counts of tasks created/deleted.
         """
@@ -270,42 +270,13 @@ class ProjMgmtSync:
 
         for task in tasks:
             task_id = task.get("id") or "?"
-            desc = task.get("scope_description") or "Task"
             state = task.get("state") or ""
             lab_name = task.get("lab_name") or ""
             lab_project_name = task.get("lab_project_name") or ""
+            subtasks = task.get("subtasks") or []
 
-            # Build the task name (must match what we create)
-            if lab_project_name:
-                task_name = f"PM-{task_id} [{lab_project_name}]: {desc[:80]}"
-            else:
-                task_name = f"PM-{task_id}: {desc[:80]}"
-
-            # Determine which local group this task belongs to
-            if lab_name:
-                local_group = ResearchGroup.query.filter_by(name=lab_name).first()
-                if not local_group and state not in terminal_states:
-                    local_group = ResearchGroup(
-                        name=lab_name,
-                        manager_name="",
-                        project_name="",
-                    )
-                    db.session.add(local_group)
-                    db.session.flush()
-            else:
-                local_group = ResearchGroup.query.filter_by(name="ProjMgmt Tasks").first()
-                if not local_group and state not in terminal_states:
-                    local_group = ResearchGroup(
-                        name="ProjMgmt Tasks",
-                        manager_name="ProjMgmt",
-                        project_name="",
-                    )
-                    db.session.add(local_group)
-                    db.session.flush()
-
-            # For cancelled/closed tasks: find and delete the local project
+            # For cancelled/closed tasks: delete all local projects matching PM-{task_id}
             if state in terminal_states:
-                # Search all groups for a project matching this task's PM- prefix
                 pm_prefix = f"PM-{task_id}"
                 all_matching = Project.query.filter(
                     Project.name.like(f"{pm_prefix}%")
@@ -315,21 +286,68 @@ class ProjMgmtSync:
                     tasks_deleted += 1
                 continue
 
-            # Active task: create if missing
-            if not local_group:
-                continue
+            # Find the local group for this task's lab
+            if lab_name:
+                local_group = ResearchGroup.query.filter_by(name=lab_name).first()
+                if not local_group:
+                    local_group = ResearchGroup(
+                        name=lab_name,
+                        manager_name="",
+                        project_name="",
+                    )
+                    db.session.add(local_group)
+                    db.session.flush()
+            else:
+                local_group = ResearchGroup.query.filter_by(name="ProjMgmt Tasks").first()
+                if not local_group:
+                    local_group = ResearchGroup(
+                        name="ProjMgmt Tasks",
+                        manager_name="ProjMgmt",
+                        project_name="",
+                    )
+                    db.session.add(local_group)
+                    db.session.flush()
 
-            existing = Project.query.filter_by(
-                name=task_name, research_group_id=local_group.id
-            ).first()
-            if not existing:
-                proj = Project(
-                    name=task_name,
-                    research_group_id=local_group.id,
-                    archived=False,
-                )
-                db.session.add(proj)
-                tasks_created += 1
+            # Find the local project (lab project) to place subtasks under
+            # If the lab has a matching project name, use that group;
+            # otherwise subtasks go directly under the lab group
+            target_group = local_group
+            if lab_project_name:
+                local_proj = Project.query.filter_by(
+                    name=lab_project_name, research_group_id=local_group.id
+                ).first()
+                # The lab project should already exist from pull_structure,
+                # but if not, we don't create it here — subtasks go under the lab group
+
+            # Create each subtask as a Time Tracker project under the lab group
+            for st in subtasks:
+                st_id = st.get("id") or "?"
+                st_title = st.get("title") or "Subtask"
+                subtask_name = f"PM-{task_id}.{st_id}: {st_title}"
+
+                existing = Project.query.filter_by(
+                    name=subtask_name, research_group_id=target_group.id
+                ).first()
+                if not existing:
+                    proj = Project(
+                        name=subtask_name,
+                        research_group_id=target_group.id,
+                        archived=False,
+                    )
+                    db.session.add(proj)
+                    tasks_created += 1
+
+            # Also clean up any old-style PM-{task_id} projects (from before this change)
+            # Old format was "PM-{id} [{project}]: desc" or "PM-{id}: desc"
+            old_prefix = f"PM-{task_id}"
+            old_projects = Project.query.filter(
+                Project.name.like(f"{old_prefix}%"),
+            ).all()
+            for op in old_projects:
+                # Keep subtask entries (PM-{id}.{subid}: ...), delete old-style
+                if f"PM-{task_id}." not in op.name:
+                    db.session.delete(op)
+                    tasks_deleted += 1
 
         db.session.commit()
         return {"tasks_created": tasks_created, "tasks_deleted": tasks_deleted}
