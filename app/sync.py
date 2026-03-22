@@ -154,24 +154,23 @@ class ProjMgmtSync:
         projects_created = 0
 
         for lab_data in remote_labs:
-            remote_lab_id = lab_data["id"]
-            lab_name = lab_data["name"]
-            manager = lab_data.get("manager_name", "")
+            lab_name = lab_data.get("name") or f"Lab {lab_data.get('id', '?')}"
+            manager = lab_data.get("manager_name") or ""
 
             # Find local group by name (best match)
             local_group = ResearchGroup.query.filter_by(name=lab_name).first()
             if not local_group:
                 local_group = ResearchGroup(
                     name=lab_name,
-                    manager_name=manager or "",
+                    manager_name=manager,
                     project_name="",
                 )
                 db.session.add(local_group)
                 db.session.flush()
                 labs_created += 1
 
-            for proj_data in lab_data.get("projects", []):
-                proj_name = proj_data["name"]
+            for proj_data in lab_data.get("projects") or []:
+                proj_name = proj_data.get("name") or f"Project {proj_data.get('id', '?')}"
                 # Check if project already exists locally under this group
                 local_proj = Project.query.filter_by(
                     name=proj_name, research_group_id=local_group.id
@@ -180,7 +179,7 @@ class ProjMgmtSync:
                     local_proj = Project(
                         name=proj_name,
                         research_group_id=local_group.id,
-                        archived=proj_data.get("archived", False),
+                        archived=bool(proj_data.get("archived")),
                     )
                     db.session.add(local_proj)
                     projects_created += 1
@@ -205,11 +204,14 @@ class ProjMgmtSync:
             raise ValueError(f"Failed to pull tasks: {resp.text}")
 
         tasks = resp.json()
+        if not tasks:
+            return {"tasks_created": 0}
+
         tasks_created = 0
 
         # Put ProjMgmt tasks under a dedicated local group
         pm_group = ResearchGroup.query.filter_by(name="ProjMgmt Tasks").first()
-        if not pm_group and tasks:
+        if not pm_group:
             pm_group = ResearchGroup(
                 name="ProjMgmt Tasks",
                 manager_name="ProjMgmt",
@@ -219,16 +221,18 @@ class ProjMgmtSync:
             db.session.flush()
 
         for task in tasks:
-            desc = task.get('scope_description') or 'Task'
-            task_name = f"PM-{task['id']}: {desc[:80]}"
+            task_id = task.get("id") or "?"
+            desc = task.get("scope_description") or "Task"
+            task_name = f"PM-{task_id}: {desc[:80]}"
             existing = Project.query.filter_by(
                 name=task_name, research_group_id=pm_group.id
             ).first()
             if not existing:
+                state = task.get("state") or ""
                 proj = Project(
                     name=task_name,
                     research_group_id=pm_group.id,
-                    archived=task.get("state") in ("delivered", "closed", "parked"),
+                    archived=state in ("delivered", "closed", "parked", "cancelled"),
                 )
                 db.session.add(proj)
                 tasks_created += 1
@@ -263,8 +267,8 @@ class ProjMgmtSync:
                 "group_id": e.research_group_id,
                 "project_id": e.project_id,
                 "date": e.date.isoformat(),
-                "task_description": e.task_description,
-                "total_hours": e.total_hours,
+                "task_description": e.task_description or "",
+                "total_hours": e.total_hours or 0,
             })
 
         if not payload:
@@ -307,32 +311,32 @@ class ProjMgmtSync:
         projects_created = 0
 
         # Process new labs
-        for lab_data in data.get("labs", []):
-            lab_name = lab_data["name"]
+        for lab_data in data.get("labs") or []:
+            lab_name = lab_data.get("name") or f"Lab {lab_data.get('id', '?')}"
             local_group = ResearchGroup.query.filter_by(name=lab_name).first()
             if not local_group:
                 local_group = ResearchGroup(
                     name=lab_name,
-                    manager_name=lab_data.get("manager_name", ""),
+                    manager_name=lab_data.get("manager_name") or "",
                     project_name="",
                 )
                 db.session.add(local_group)
                 db.session.flush()
                 labs_created += 1
 
-            for proj_data in lab_data.get("projects", []):
-                proj_name = proj_data["name"]
+            for proj_data in lab_data.get("projects") or []:
+                proj_name = proj_data.get("name") or f"Project {proj_data.get('id', '?')}"
                 if not Project.query.filter_by(name=proj_name, research_group_id=local_group.id).first():
                     db.session.add(Project(
                         name=proj_name,
                         research_group_id=local_group.id,
-                        archived=proj_data.get("archived", False),
+                        archived=bool(proj_data.get("archived")),
                     ))
                     projects_created += 1
 
         # Process new standalone projects
-        for proj_data in data.get("projects", []):
-            lab_name = proj_data.get("lab_name", "Unknown Lab")
+        for proj_data in data.get("projects") or []:
+            lab_name = proj_data.get("lab_name") or "Unknown Lab"
             local_group = ResearchGroup.query.filter_by(name=lab_name).first()
             if not local_group:
                 local_group = ResearchGroup(
@@ -342,12 +346,12 @@ class ProjMgmtSync:
                 db.session.flush()
                 labs_created += 1
 
-            proj_name = proj_data["name"]
+            proj_name = proj_data.get("name") or f"Project {proj_data.get('id', '?')}"
             if not Project.query.filter_by(name=proj_name, research_group_id=local_group.id).first():
                 db.session.add(Project(
                     name=proj_name,
                     research_group_id=local_group.id,
-                    archived=proj_data.get("archived", False),
+                    archived=bool(proj_data.get("archived")),
                 ))
                 projects_created += 1
 
@@ -357,7 +361,7 @@ class ProjMgmtSync:
         return {
             "labs_created": labs_created,
             "projects_created": projects_created,
-            "tasks": len(data.get("tasks", [])),
+            "tasks": len(data.get("tasks") or []),
             "server_time": server_time,
         }
 
