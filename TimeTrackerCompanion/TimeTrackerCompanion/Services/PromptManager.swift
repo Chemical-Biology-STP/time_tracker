@@ -71,7 +71,7 @@ class PromptManager: ObservableObject {
             if self.timeUntilNextPrompt <= 0 {
                 if self.skipNextPrompt {
                     self.skipNextPrompt = false
-                } else if self.settingsManager?.isWithinWorkingHours() ?? true {
+                } else if self.settingsManager?.isWithinWorkingHours() ?? false {
                     self.showPrompt = true
                     self.lastPromptTime = Date()
                 }
