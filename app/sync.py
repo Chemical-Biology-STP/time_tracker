@@ -348,10 +348,14 @@ class ProjMgmtSync:
         for e in entries:
             if not e.project_id:
                 continue
+            group_name = e.group.name if e.group else ""
+            project_name = e.project.name if e.project else ""
             payload.append({
                 "entry_id": e.id,
                 "group_id": e.research_group_id,
                 "project_id": e.project_id,
+                "group_name": group_name,
+                "project_name": project_name,
                 "date": e.date.isoformat(),
                 "task_description": e.task_description or "",
                 "total_hours": e.total_hours or 0,
