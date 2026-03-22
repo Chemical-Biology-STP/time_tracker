@@ -192,6 +192,9 @@ class ProjMgmtSync:
     def pull_tasks(self) -> dict:
         """Pull ProjMgmt tasks assigned to the user, create as local projects.
 
+        Tasks are grouped under their originating lab and project from ProjMgmt.
+        Tasks without a lab/project fall under a generic "ProjMgmt Tasks" group.
+
         Returns count of tasks pulled.
         """
         resp = requests.get(
@@ -209,29 +212,49 @@ class ProjMgmtSync:
 
         tasks_created = 0
 
-        # Put ProjMgmt tasks under a dedicated local group
-        pm_group = ResearchGroup.query.filter_by(name="ProjMgmt Tasks").first()
-        if not pm_group:
-            pm_group = ResearchGroup(
-                name="ProjMgmt Tasks",
-                manager_name="ProjMgmt",
-                project_name="",
-            )
-            db.session.add(pm_group)
-            db.session.flush()
-
         for task in tasks:
             task_id = task.get("id") or "?"
             desc = task.get("scope_description") or "Task"
-            task_name = f"PM-{task_id}: {desc[:80]}"
+            state = task.get("state") or ""
+            lab_name = task.get("lab_name") or ""
+            lab_project_name = task.get("lab_project_name") or ""
+
+            # Determine which local group this task belongs to
+            if lab_name:
+                local_group = ResearchGroup.query.filter_by(name=lab_name).first()
+                if not local_group:
+                    local_group = ResearchGroup(
+                        name=lab_name,
+                        manager_name="",
+                        project_name="",
+                    )
+                    db.session.add(local_group)
+                    db.session.flush()
+            else:
+                # No lab on the request — use generic group
+                local_group = ResearchGroup.query.filter_by(name="ProjMgmt Tasks").first()
+                if not local_group:
+                    local_group = ResearchGroup(
+                        name="ProjMgmt Tasks",
+                        manager_name="ProjMgmt",
+                        project_name="",
+                    )
+                    db.session.add(local_group)
+                    db.session.flush()
+
+            # Build task name: include lab project prefix if available
+            if lab_project_name:
+                task_name = f"PM-{task_id} [{lab_project_name}]: {desc[:80]}"
+            else:
+                task_name = f"PM-{task_id}: {desc[:80]}"
+
             existing = Project.query.filter_by(
-                name=task_name, research_group_id=pm_group.id
+                name=task_name, research_group_id=local_group.id
             ).first()
             if not existing:
-                state = task.get("state") or ""
                 proj = Project(
                     name=task_name,
-                    research_group_id=pm_group.id,
+                    research_group_id=local_group.id,
                     archived=state in ("delivered", "closed", "parked", "cancelled"),
                 )
                 db.session.add(proj)
