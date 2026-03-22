@@ -99,17 +99,18 @@ class SettingsManager: ObservableObject {
     
     /// Check if current time is within working hours and on a working day
     func isWithinWorkingHours() -> Bool {
-        guard workingHoursEnabled else { return true }
-        
         let now = Date()
         let calendar = Calendar.current
         let weekday = calendar.component(.weekday, from: now)
-        let hour = calendar.component(.hour, from: now)
-        let minute = calendar.component(.minute, from: now)
         
-        // Check if today is a working day
+        // Always check working days regardless of workingHoursEnabled
         guard workingDays.contains(weekday) else { return false }
         
+        // If working hours restriction is disabled, any time on a working day is fine
+        guard workingHoursEnabled else { return true }
+        
+        let hour = calendar.component(.hour, from: now)
+        let minute = calendar.component(.minute, from: now)
         let currentMinutes = hour * 60 + minute
         let startMinutes = workStartHour * 60 + workStartMinute
         let endMinutes = workEndHour * 60 + workEndMinute
