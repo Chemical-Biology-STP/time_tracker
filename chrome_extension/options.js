@@ -287,16 +287,16 @@ async function loadProjects() {
 
 function showNewProjectForm() {
   document.getElementById('newProjectForm').classList.add('show');
-  document.getElementById('newProjectName').focus();
+  document.getElementById('newProjectNameInput').focus();
 }
 
 function hideNewProjectForm() {
   document.getElementById('newProjectForm').classList.remove('show');
-  document.getElementById('newProjectName').value = '';
+  document.getElementById('newProjectNameInput').value = '';
 }
 
 async function saveNewProject() {
-  const name = document.getElementById('newProjectName').value.trim();
+  const name = document.getElementById('newProjectNameInput').value.trim();
   const groupId = document.getElementById('projectGroupFilter').value;
   
   if (!name) {
