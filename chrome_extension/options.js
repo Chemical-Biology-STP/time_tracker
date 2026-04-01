@@ -141,13 +141,13 @@ function hideNewGroupForm() {
   document.getElementById('newGroupForm').classList.remove('show');
   document.getElementById('newGroupName').value = '';
   document.getElementById('newManagerName').value = '';
-  document.getElementById('newProjectName').value = '';
+  document.getElementById('newGroupProjectName').value = '';
 }
 
 async function saveNewGroup() {
   const name = document.getElementById('newGroupName').value.trim();
   const managerName = document.getElementById('newManagerName').value.trim();
-  const projectName = document.getElementById('newProjectName').value.trim();
+  const projectName = document.getElementById('newGroupProjectName').value.trim();
   
   if (!name) {
     alert('Please enter a group name');
