@@ -25,16 +25,38 @@
 <div style="background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 6px; padding: 16px; margin-bottom: 16px;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
         <div>
-            <strong style="font-size: 16px;">{{ group.name }}</strong>
+            <strong style="font-size: 16px;" id="group-name-{{ group.id }}">{{ group.name }}</strong>
+            <span style="font-size: 13px; color: #666;">— {{ group.manager_name }}{% if group.project_name %} · {{ group.project_name }}{% endif %}</span>
         </div>
         <div style="display: flex; gap: 8px; align-items: center;">
             <a href="{{ url_for('main.entries', group_id=group.id) }}" style="font-size: 13px;">Entries</a>
             <a href="{{ url_for('main.calendar_view', group_id=group.id) }}" style="font-size: 13px;">Calendar</a>
             <a href="{{ url_for('main.summary', group_id=group.id) }}" style="font-size: 13px;">Summary</a>
+            <button type="button" onclick="document.getElementById('edit-group-{{ group.id }}').style.display = document.getElementById('edit-group-{{ group.id }}').style.display === 'none' ? 'block' : 'none'" style="font-size: 11px; padding: 4px 10px; background: #0078d4; color: white; border: none; border-radius: 4px; cursor: pointer;">Edit</button>
             <form method="POST" action="{{ url_for('main.delete_group', group_id=group.id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Delete this group and all its entries?');">
                 <button type="submit" class="delete-btn" style="font-size: 11px;">Delete</button>
             </form>
         </div>
+    </div>
+
+    <!-- Edit group form (hidden by default) -->
+    <div id="edit-group-{{ group.id }}" style="display: none; margin-bottom: 12px; padding: 12px; background: #fff; border: 1px solid #ddd; border-radius: 4px;">
+        <form method="POST" action="{{ url_for('main.edit_group', group_id=group.id) }}" style="display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin: 0;">
+            <div>
+                <label style="font-size: 12px; color: #666;">Group Name</label>
+                <input type="text" name="name" value="{{ group.name }}" required style="padding: 5px 8px; font-size: 13px; width: 160px;">
+            </div>
+            <div>
+                <label style="font-size: 12px; color: #666;">Manager</label>
+                <input type="text" name="manager_name" value="{{ group.manager_name }}" style="padding: 5px 8px; font-size: 13px; width: 160px;">
+            </div>
+            <div>
+                <label style="font-size: 12px; color: #666;">Project Name</label>
+                <input type="text" name="project_name" value="{{ group.project_name }}" style="padding: 5px 8px; font-size: 13px; width: 160px;">
+            </div>
+            <button type="submit" style="padding: 5px 12px; font-size: 13px; background: #28a745;">Save</button>
+            <button type="button" onclick="document.getElementById('edit-group-{{ group.id }}').style.display='none'" style="padding: 5px 12px; font-size: 13px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
+        </form>
     </div>
 
     <!-- Projects -->
@@ -44,8 +66,9 @@
         <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
             {% for project in group.projects %}
             <div style="display: inline-flex; align-items: center; gap: 4px; background: {{ '#fff3cd' if project.archived else '#e8f5e9' }}; border: 1px solid {{ '#ffc107' if project.archived else '#a5d6a7' }}; border-radius: 4px; padding: 4px 8px; font-size: 13px;">
-                <a href="{{ url_for('main.entries', group_id=group.id, project=project.id) }}" style="text-decoration: none; color: #333;">{{ project.name }}</a>
+                <a href="{{ url_for('main.entries', group_id=group.id, project=project.id) }}" style="text-decoration: none; color: #333;" id="project-name-{{ project.id }}">{{ project.name }}</a>
                 {% if project.archived %}<span style="color: #856404; font-size: 11px;">(archived)</span>{% endif %}
+                <button type="button" onclick="document.getElementById('edit-project-{{ project.id }}').style.display = document.getElementById('edit-project-{{ project.id }}').style.display === 'none' ? 'inline-flex' : 'none'" title="Edit" style="background: none; border: none; cursor: pointer; padding: 0 2px; font-size: 13px; color: #0078d4;">✏️</button>
                 <form method="POST" action="{{ url_for('main.archive_project', project_id=project.id) }}" style="display:inline; margin:0;">
                     <button type="submit" title="{{ 'Unarchive' if project.archived else 'Archive' }}" style="background: none; border: none; cursor: pointer; padding: 0 2px; font-size: 13px; color: #888;">{{ '📂' if project.archived else '📁' }}</button>
                 </form>
@@ -53,6 +76,11 @@
                     <button type="submit" title="Delete" style="background: none; border: none; cursor: pointer; padding: 0 2px; font-size: 13px; color: #e74c3c;">🗑️</button>
                 </form>
             </div>
+            <form id="edit-project-{{ project.id }}" method="POST" action="{{ url_for('main.edit_project', project_id=project.id) }}" style="display: none; align-items: center; gap: 4px; margin: 0;">
+                <input type="text" name="project_name" value="{{ project.name }}" required style="padding: 4px 6px; font-size: 13px; width: 150px;">
+                <button type="submit" style="padding: 4px 8px; font-size: 12px; background: #28a745;">Save</button>
+                <button type="button" onclick="this.parentElement.style.display='none'" style="padding: 4px 8px; font-size: 12px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
+            </form>
             {% endfor %}
         </div>
         {% else %}

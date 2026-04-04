@@ -4,7 +4,12 @@
 
 {% block content %}
 <h1>{{ group.name }} - Time Entries</h1>
+{% if project_filter and project_filter != 'none' %}
+{% set active_project = all_projects | selectattr('id', 'equalto', project_filter|int) | first %}
+<p>Project: {{ active_project.name if active_project else group.project_name }} | Manager: {{ group.manager_name }}</p>
+{% else %}
 <p>Project: {{ group.project_name }} | Manager: {{ group.manager_name }}</p>
+{% endif %}
 
 <h2>Add New Entry</h2>
 <form method="POST" action="{{ url_for('main.entries', group_id=group.id) }}">

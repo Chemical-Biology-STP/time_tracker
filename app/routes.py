@@ -47,6 +47,22 @@ def groups():
     return render_template('groups.html', groups=all_groups)
 
 
+@bp.route('/groups/<int:group_id>/edit', methods=['POST'])
+def edit_group(group_id):
+    """Edit a research group's name, manager, and project name."""
+    group = ResearchGroup.query.get_or_404(group_id)
+    name = request.form.get('name', '').strip()
+    if not validate_group_name(name):
+        flash('Group name cannot be empty.', 'error')
+        return redirect(url_for('main.groups'))
+    group.name = name
+    group.manager_name = request.form.get('manager_name', '').strip()
+    group.project_name = request.form.get('project_name', '').strip()
+    db.session.commit()
+    flash('Research group updated.', 'success')
+    return redirect(url_for('main.groups'))
+
+
 @bp.route('/groups/<int:group_id>/delete', methods=['POST'])
 def delete_group(group_id):
     """Delete a research group and all its entries."""
@@ -80,6 +96,20 @@ def archive_project(project_id):
     db.session.commit()
     status = 'archived' if project.archived else 'unarchived'
     flash(f'Project "{project.name}" {status}.', 'success')
+    return redirect(url_for('main.groups'))
+
+
+@bp.route('/projects/<int:project_id>/edit', methods=['POST'])
+def edit_project(project_id):
+    """Edit a project's name."""
+    project = Project.query.get_or_404(project_id)
+    name = request.form.get('project_name', '').strip()
+    if not name:
+        flash('Project name cannot be empty.', 'error')
+    else:
+        project.name = name
+        db.session.commit()
+        flash(f'Project renamed to "{name}".', 'success')
     return redirect(url_for('main.groups'))
 
 
