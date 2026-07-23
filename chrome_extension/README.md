@@ -1,6 +1,6 @@
 # Time Tracker - Chrome Extension
 
-A fully standalone Chrome extension for tracking work time. No server required - data syncs automatically across devices via your Google account.
+A fully standalone Chrome extension for tracking work time. Works entirely offline on a single device out of the box, with optional cross-device sync via Google sign-in and Firestore.
 
 ## Features
 
@@ -8,7 +8,7 @@ A fully standalone Chrome extension for tracking work time. No server required -
 - 🔔 Periodic reminder notifications
 - 📊 View entries and summary statistics
 - 📥 Export to CSV for reporting
-- 🔄 Auto-sync across all your Chrome browsers
+- 🔄 Optional cloud sync across devices (sign in with Google)
 - 👥 Multiple research groups support
 
 ## Installation
@@ -19,6 +19,14 @@ A fully standalone Chrome extension for tracking work time. No server required -
 4. Click "Load unpacked"
 5. Select the `chrome_extension` folder
 6. Pin the extension to your toolbar for easy access
+
+The extension works fully offline on that one device at this point — no further setup needed.
+
+## Cloud Sync (optional)
+
+To sync your groups, projects, entries, and settings across multiple devices, see [`CLOUD_SYNC_SETUP.md`](./CLOUD_SYNC_SETUP.md). It walks through creating a free Firebase project and connecting it to the extension (about 10-15 minutes, one-time).
+
+If you don't set this up, the extension still works normally — data just stays local to that device, the same way it worked in versions prior to 1.7.0.
 
 ## Usage
 

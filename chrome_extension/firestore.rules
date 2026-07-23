@@ -1,0 +1,19 @@
+rules_version = '2';
+
+// Firestore Security Rules for Time Tracker.
+//
+// Every user's data lives entirely under users/{uid}/... and this rule
+// only ever allows a request to read or write documents under the uid
+// that matches the requester's own authenticated Firebase uid. There is
+// no cross-user access of any kind, and no unauthenticated access.
+//
+// How to apply: Firebase Console -> Firestore Database -> Rules tab ->
+// paste this file's contents -> Publish.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}

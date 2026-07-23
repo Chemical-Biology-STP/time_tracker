@@ -455,9 +455,40 @@
       display: flex; gap: 10px;
     }
     .day-detail-hrs { font-weight: 600; color: #0078d4; }
+
+    /* Sync status bar */
+    .sync-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 16px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #eee;
+      font-size: 11px;
+      color: #888;
+      cursor: pointer;
+    }
+    .sync-bar:hover { background: #f0f0f0; }
+    .sync-bar .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #ccc;
+      flex-shrink: 0;
+      display: inline-block;
+      margin-right: 5px;
+    }
+    .sync-bar.state-success .dot { background: #2ecc71; }
+    .sync-bar.state-syncing .dot { background: #f0ad4e; }
+    .sync-bar.state-error .dot { background: #e74c3c; }
   </style>
 </head>
 <body>
+  <div class="sync-bar" id="syncBar" title="Click to open cloud sync settings">
+    <span><span class="dot"></span><span id="syncStatusText">Checking sync status…</span></span>
+    <span>⚙️</span>
+  </div>
   <div class="tabs">
     <div class="tab active" data-panel="log">Log Time</div>
     <div class="tab" data-panel="entries">Entries</div>
@@ -647,7 +678,11 @@
     </div>
   </div>
 
+  <script src="firebase-config.js"></script>
+  <script src="cloud-auth.js"></script>
+  <script src="firestore-client.js"></script>
   <script src="storage.js"></script>
+  <script src="sync-engine.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

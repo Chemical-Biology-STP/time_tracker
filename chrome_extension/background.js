@@ -1,20 +1,40 @@
 // Background service worker for Time Tracker
 
-// Initialize alarm on install
+// Service workers can't use <script> tags, so the shared modules are loaded
+// here with importScripts(). Order matters only in that each file expects
+// the ones before it to already be on `self` (FirestoreClient uses
+// FirebaseConfig, SyncEngine uses CloudAuth + FirestoreClient + the
+// chrome.storage.local shape that Storage defines, etc).
+importScripts(
+  'firebase-config.js',
+  'cloud-auth.js',
+  'firestore-client.js',
+  'storage.js',
+  'sync-engine.js'
+);
+
+const CLOUD_SYNC_ALARM = 'timeTrackerCloudSync';
+const CLOUD_SYNC_PERIOD_MINUTES = 5;
+
+// Initialize alarms on install
 chrome.runtime.onInstalled.addListener(async () => {
   console.log('Time Tracker installed');
-  await initializeAlarm();
+  await initializeReminderAlarm();
+  await initializeCloudSyncAlarm();
 });
 
-// Initialize alarm on startup
+// Initialize alarms on startup
 chrome.runtime.onStartup.addListener(async () => {
-  await initializeAlarm();
+  await initializeReminderAlarm();
+  await initializeCloudSyncAlarm();
 });
 
-// Handle alarm
+// Handle alarms
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'timeTrackerReminder') {
     showReminder();
+  } else if (alarm.name === CLOUD_SYNC_ALARM) {
+    SyncEngine.syncNow().catch(err => console.warn('Cloud sync failed:', err));
   }
 });
 
@@ -37,69 +57,66 @@ chrome.notifications.onClicked.addListener(async (notificationId) => {
   }
 });
 
-async function initializeAlarm() {
-  const data = await chrome.storage.sync.get({ promptIntervalMinutes: 30 });
-  
+async function initializeReminderAlarm() {
+  const settings = await Storage.getSettings();
+
   // Clear existing alarm
   await chrome.alarms.clear('timeTrackerReminder');
-  
+
   // Create new alarm
   chrome.alarms.create('timeTrackerReminder', {
-    delayInMinutes: data.promptIntervalMinutes,
-    periodInMinutes: data.promptIntervalMinutes
+    delayInMinutes: settings.promptIntervalMinutes,
+    periodInMinutes: settings.promptIntervalMinutes
   });
-  
-  console.log(`Reminder alarm set for every ${data.promptIntervalMinutes} minutes`);
+
+  console.log(`Reminder alarm set for every ${settings.promptIntervalMinutes} minutes`);
+}
+
+async function initializeCloudSyncAlarm() {
+  chrome.alarms.create(CLOUD_SYNC_ALARM, {
+    delayInMinutes: 1,
+    periodInMinutes: CLOUD_SYNC_PERIOD_MINUTES
+  });
+
+  // Also try an immediate sync (no-op if the user isn't signed in yet).
+  SyncEngine.syncNow().catch(err => console.warn('Initial cloud sync failed:', err));
 }
 
 async function showReminder() {
-  const data = await chrome.storage.sync.get([
-    'notificationsEnabled',
-    'workingDays', 
-    'workStartTime',
-    'workEndTime'
-  ]);
-  
-  // Apply defaults for missing values
-  const notificationsEnabled = data.notificationsEnabled !== false; // default true
-  const workingDays = Array.isArray(data.workingDays) && data.workingDays.length > 0 
-    ? data.workingDays 
-    : [1, 2, 3, 4, 5]; // Mon-Fri default
-  const workStartTime = data.workStartTime || '09:00';
-  const workEndTime = data.workEndTime || '17:00';
-  
-  console.log('Reminder check:', { notificationsEnabled, workingDays, workStartTime, workEndTime });
-  
-  if (!notificationsEnabled) {
+  const settings = await Storage.getSettings();
+
+  console.log('Reminder check:', settings);
+
+  if (!settings.notificationsEnabled) {
     console.log('Notifications disabled, skipping');
     return;
   }
-  
+
   // Check if today is a working day
   const now = new Date();
   const currentDay = now.getDay(); // 0=Sun, 1=Mon, etc.
-  
-  console.log('Current day:', currentDay, 'Working days:', workingDays);
-  
-  if (!workingDays.includes(currentDay)) {
+
+  console.log('Current day:', currentDay, 'Working days:', settings.workingDays);
+
+  if (!settings.workingDays.includes(currentDay)) {
     console.log('Not a working day, skipping notification');
     return;
   }
-  
+
   // Check if within working hours
   const currentTime = now.getHours() * 60 + now.getMinutes();
-  const [startH, startM] = workStartTime.split(':').map(Number);
-  const [endH, endM] = workEndTime.split(':').map(Number);
+  const [startH, startM] = settings.workStartTime.split(':').map(Number);
+  const [endH, endM] = settings.workEndTime.split(':').map(Number);
   const startMinutes = startH * 60 + startM;
   const endMinutes = endH * 60 + endM;
-  
+
   console.log('Current time (mins):', currentTime, 'Working hours:', startMinutes, '-', endMinutes);
-  
+
   if (currentTime < startMinutes || currentTime >= endMinutes) {
     console.log('Outside working hours, skipping notification');
     return;
   }
-  
+
   console.log('Showing notification');
   chrome.notifications.create('timeTrackerReminder', {
     type: 'basic',
@@ -111,9 +128,13 @@ async function showReminder() {
   });
 }
 
-// Listen for settings changes to update alarm
+// Listen for settings changes to update the reminder alarm
 chrome.storage.onChanged.addListener((changes, namespace) => {
-  if (namespace === 'sync' && changes.promptIntervalMinutes) {
-    initializeAlarm();
+  if (namespace === 'local' && changes.settings) {
+    const oldInterval = changes.settings.oldValue && changes.settings.oldValue.promptIntervalMinutes;
+    const newInterval = changes.settings.newValue && changes.settings.newValue.promptIntervalMinutes;
+    if (newInterval && newInterval !== oldInterval) {
+      initializeReminderAlarm();
+    }
   }
 });

@@ -31,7 +31,74 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('calPrev').addEventListener('click', () => { calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; } renderCalendar(); });
   document.getElementById('calNext').addEventListener('click', () => { calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; } renderCalendar(); });
   document.getElementById('dayDetailClose').addEventListener('click', () => { document.getElementById('dayDetail').style.display = 'none'; });
+
+  initializeSyncBar();
 });
+
+// ── Cloud sync status bar ──
+
+async function initializeSyncBar() {
+  document.getElementById('syncBar').addEventListener('click', openSettings);
+  await refreshSyncBar();
+  // Keep "Synced Xm ago" text fresh while the popup stays open.
+  setInterval(refreshSyncBar, 30000);
+
+  // Keep the popup's view in sync if data changes underneath it -- e.g. a
+  // background alarm just pulled new entries from another device while
+  // this popup happens to be open.
+  chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace !== 'local') return;
+    if (changes.syncStatus) refreshSyncBar();
+    if (changes.groups || changes.projects || changes.entries) {
+      reloadAllPanelsFromStorage();
+    }
+  });
+}
+
+async function refreshSyncBar() {
+  const bar = document.getElementById('syncBar');
+  const text = document.getElementById('syncStatusText');
+  const signedIn = await CloudAuth.isSignedIn();
+
+  if (!signedIn) {
+    bar.className = 'sync-bar';
+    text.textContent = 'Cloud sync off — click to sign in';
+    return;
+  }
+
+  const status = await SyncEngine.getStatus();
+  bar.className = 'sync-bar state-' + status.state;
+
+  if (status.state === 'syncing') {
+    text.textContent = 'Syncing…';
+  } else if (status.state === 'error') {
+    text.textContent = 'Sync error — click Settings for details';
+  } else if (status.lastSyncedAt) {
+    text.textContent = 'Synced ' + formatRelativeTime(status.lastSyncedAt);
+  } else {
+    text.textContent = 'Signed in — syncing soon';
+  }
+}
+
+function formatRelativeTime(ms) {
+  const diffSec = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if (diffSec < 60) return 'just now';
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  return `${Math.round(diffHr / 24)}d ago`;
+}
+
+async function reloadAllPanelsFromStorage() {
+  groups = await Storage.getGroups();
+  const activePanel = document.querySelector('.panel.active');
+  if (!activePanel) return;
+  if (activePanel.id === 'entries') loadEntries();
+  if (activePanel.id === 'summary') loadSummary();
+  if (activePanel.id === 'calendar') renderCalendar();
+  if (activePanel.id === 'log') initializeLogPanel();
+}
 
 function initializeTabs() {
   document.querySelectorAll('.tab').forEach(tab => {

@@ -26,7 +26,125 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('addProjectBtn').addEventListener('click', showNewProjectForm);
   document.getElementById('saveProjectBtn').addEventListener('click', saveNewProject);
   document.getElementById('cancelProjectBtn').addEventListener('click', hideNewProjectForm);
+
+  // Cloud sync
+  await initializeCloudSync();
 });
+
+// ── Cloud Sync ──
+
+async function initializeCloudSync() {
+  document.getElementById('signInBtn').addEventListener('click', handleSignIn);
+  document.getElementById('signOutBtn').addEventListener('click', handleSignOut);
+  document.getElementById('syncNowBtn').addEventListener('click', handleSyncNow);
+
+  await refreshSyncUI();
+
+  chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace === 'local' && changes.syncStatus) {
+      refreshSyncUI();
+    }
+    if (namespace === 'local' && (changes.groups || changes.projects)) {
+      // Cloud sync may have pulled in groups/projects from another device.
+      loadGroups();
+      loadProjects();
+    }
+  });
+
+  setInterval(refreshSyncUI, 15000);
+}
+
+async function refreshSyncUI() {
+  const signedIn = await CloudAuth.isSignedIn();
+  const dot = document.getElementById('syncDot');
+  const stateText = document.getElementById('syncStateText');
+  const emailEl = document.getElementById('syncEmail');
+  const signInBtn = document.getElementById('signInBtn');
+  const signOutBtn = document.getElementById('signOutBtn');
+  const syncNowBtn = document.getElementById('syncNowBtn');
+  const errorMsg = document.getElementById('syncErrorMsg');
+
+  if (!signedIn) {
+    dot.className = 'sync-dot';
+    stateText.textContent = 'Not signed in';
+    emailEl.textContent = '';
+    signInBtn.style.display = '';
+    signOutBtn.style.display = 'none';
+    syncNowBtn.style.display = 'none';
+    errorMsg.classList.remove('show');
+    return;
+  }
+
+  const session = await CloudAuth.getSession();
+  const status = await SyncEngine.getStatus();
+
+  dot.className = 'sync-dot state-' + status.state;
+  emailEl.textContent = session && session.email ? `(${session.email})` : '';
+  signInBtn.style.display = 'none';
+  signOutBtn.style.display = '';
+  syncNowBtn.style.display = '';
+
+  if (status.state === 'syncing') {
+    stateText.textContent = 'Syncing…';
+  } else if (status.state === 'error') {
+    stateText.textContent = 'Sync error';
+  } else if (status.lastSyncedAt) {
+    stateText.textContent = 'Last synced ' + new Date(status.lastSyncedAt).toLocaleString();
+  } else {
+    stateText.textContent = 'Signed in';
+  }
+
+  if (status.state === 'error' && status.lastError) {
+    errorMsg.textContent = status.lastError;
+    errorMsg.classList.add('show');
+  } else {
+    errorMsg.classList.remove('show');
+  }
+}
+
+async function handleSignIn() {
+  const btn = document.getElementById('signInBtn');
+  btn.disabled = true;
+  btn.textContent = 'Signing in…';
+  try {
+    await CloudAuth.signIn(true);
+    await refreshSyncUI();
+    await SyncEngine.syncNow();
+    await refreshSyncUI();
+    await loadGroups();
+    await loadProjects();
+  } catch (err) {
+    alert('Sign-in failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Sign in with Google';
+  }
+}
+
+async function handleSignOut() {
+  if (!confirm('Sign out of cloud sync? Your local data stays on this device, but it will stop syncing until you sign in again.')) {
+    return;
+  }
+  await CloudAuth.signOut();
+  await refreshSyncUI();
+}
+
+async function handleSyncNow() {
+  const btn = document.getElementById('syncNowBtn');
+  btn.disabled = true;
+  btn.textContent = 'Syncing…';
+  try {
+    await SyncEngine.syncNow();
+    await loadGroups();
+    await loadProjects();
+  } catch (err) {
+    alert('Sync failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Sync Now';
+    await refreshSyncUI();
+  }
+}
 
 async function loadSettings() {
   const settings = await Storage.getSettings();
@@ -217,8 +335,41 @@ async function clearAllData() {
   if (!confirm('Really delete everything? Last chance!')) {
     return;
   }
-  
-  await chrome.storage.sync.clear();
+
+  // Queue cloud deletes first so a signed-in sync doesn't just pull the
+  // "deleted" data back down again on the next cycle.
+  const [allGroups, allProjects, allEntries] = await Promise.all([
+    Storage.getGroups(),
+    Storage.getProjects(),
+    Storage.getEntries(),
+  ]);
+  if (globalThis.SyncEngine) {
+    for (const g of allGroups) await SyncEngine.queueDelete('groups', g.id);
+    for (const p of allProjects) await SyncEngine.queueDelete('projects', p.id);
+    for (const e of allEntries) await SyncEngine.queueDelete('entries', e.id);
+  }
+
+  // Clear local data, but keep the migration flag set (and clear the old
+  // sync-storage remnant too) so a stale legacy copy can't get re-imported
+  // and silently undo this.
+  await chrome.storage.local.set({
+    groups: [],
+    projects: [],
+    entries: [],
+    settings: {},
+    settingsMeta: { updatedAt: Date.now(), syncedAt: 0 },
+    migratedFromSync: true,
+  });
+  try {
+    await chrome.storage.sync.clear();
+  } catch (e) {
+    console.warn('Could not clear legacy sync storage:', e);
+  }
+
+  if (globalThis.SyncEngine) {
+    SyncEngine.syncNow().catch(err => console.warn('Post-clear sync failed:', err));
+  }
+
   await loadGroups();
   await loadSettings();
   
