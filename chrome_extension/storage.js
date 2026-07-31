@@ -323,6 +323,82 @@ const Storage = {
     notifySync();
   },
 
+  /**
+   * Merge a previously exported JSON payload into local data.
+   *
+   * This is the no-setup way to move data between devices: export on one,
+   * import on the other. Merge rules:
+   *   - Items are matched by id. An item that only exists in the file is added.
+   *   - If an item exists on both sides, the one with the newer updatedAt wins,
+   *     so importing an older file can't clobber newer local edits and
+   *     importing the same file twice is harmless.
+   *   - Nothing is ever deleted by an import.
+   *   - Exports made before updatedAt existed (pre-1.7.0) are treated as the
+   *     oldest possible, so they only ever fill in genuinely missing items.
+   *
+   * Settings are only touched when options.includeSettings is true, since
+   * importing someone else's hourly rate or reminder schedule is rarely wanted.
+   *
+   * @returns per-collection counts of what was added/updated/skipped.
+   */
+  async importData(payload, options = {}) {
+    const includeSettings = !!options.includeSettings;
+    const summary = {
+      groups: { added: 0, updated: 0, skipped: 0 },
+      projects: { added: 0, updated: 0, skipped: 0 },
+      entries: { added: 0, updated: 0, skipped: 0 },
+      settingsImported: false,
+    };
+
+    const collections = [
+      ['groups', () => this.getGroups(), items => this.saveGroups(items)],
+      ['projects', () => this.getProjects(), items => this.saveProjects(items)],
+      ['entries', () => this.getEntries(), items => this.saveEntries(items)],
+    ];
+
+    for (const [name, getItems, setItems] of collections) {
+      const incoming = Array.isArray(payload[name]) ? payload[name] : [];
+      if (incoming.length === 0) continue;
+
+      const existing = await getItems();
+      const byId = new Map(existing.map(item => [Number(item.id), item]));
+
+      for (const raw of incoming) {
+        const id = raw ? Number(raw.id) : NaN;
+        if (!Number.isFinite(id)) {
+          summary[name].skipped++;
+          continue;
+        }
+
+        const incomingUpdatedAt = Number(raw.updatedAt) || 0;
+        const current = byId.get(id);
+
+        if (!current) {
+          // syncedAt: 0 so that if cloud sync is ever configured later, these
+          // imported items get pushed up rather than assumed already-synced.
+          byId.set(id, { ...raw, id, updatedAt: incomingUpdatedAt || Date.now(), syncedAt: 0 });
+          summary[name].added++;
+        } else if (incomingUpdatedAt > (Number(current.updatedAt) || 0)) {
+          byId.set(id, { ...raw, id, updatedAt: incomingUpdatedAt, syncedAt: 0 });
+          summary[name].updated++;
+        } else {
+          summary[name].skipped++;
+        }
+      }
+
+      await setItems(Array.from(byId.values()));
+    }
+
+    if (includeSettings && payload.settings && typeof payload.settings === 'object') {
+      const { updatedAt, ...incomingSettings } = payload.settings;
+      await this.saveSettings(incomingSettings);
+      summary.settingsImported = true;
+    }
+
+    notifySync();
+    return summary;
+  },
+
   // Export all data as JSON
   async exportData() {
     const groups = await this.getGroups();

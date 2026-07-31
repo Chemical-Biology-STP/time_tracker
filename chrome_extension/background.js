@@ -73,6 +73,14 @@ async function initializeReminderAlarm() {
 }
 
 async function initializeCloudSyncAlarm() {
+  // Skip entirely when cloud sync hasn't been configured for this install --
+  // no alarm, no network attempts. Data still lives locally and can be moved
+  // between devices with Export/Import JSON in Settings.
+  if (!FirebaseConfig.isConfigured()) {
+    await chrome.alarms.clear(CLOUD_SYNC_ALARM);
+    return;
+  }
+
   chrome.alarms.create(CLOUD_SYNC_ALARM, {
     delayInMinutes: 1,
     periodInMinutes: CLOUD_SYNC_PERIOD_MINUTES

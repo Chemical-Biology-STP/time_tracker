@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Time Tracker",
-  "version": "1.7.0",
-  "description": "Track your work time with periodic reminders. Data syncs across devices via Google sign-in.",
+  "version": "1.7.1",
+  "description": "Track your work time with periodic reminders. Export and import your data to move it between devices.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA9QAoAITrJpRAG5ndIJf+S8Atu2Ya4I5XAy4oD59zirrPY1Rwq805T8E7D+C0wRBEp3sDKZdgzh+3eO26B67TTvM+1a7udMOvMuwUwwkxuqDqAICb+xTFBD0LIl3rq/ftT8nR8htnm+o9x24G3MILwGw5KEv4Ho4+yXG/w13ZS9Ixd3ymgRx9Yv6o97TA6bzB87h6LUUJPWyB07qpa0vA33SBH/UNXifWUlJ4TVtjKl9timC7SE+9r/wB7Yp/xMijXuMo5rLfOA0j8kggcAHUr5zefcUiu0yYxeJ1I2QqVCwjYHEPKQghaJEB2N70cnLbSdGC6VmD/zKzzy3y6+23AwIDAQAB",
   "permissions": [
     "storage",

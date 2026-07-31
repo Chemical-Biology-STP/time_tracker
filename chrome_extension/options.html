@@ -339,6 +339,26 @@
     .sync-error.show {
       display: block;
     }
+
+    .status-msg {
+      font-size: 12px;
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 4px;
+      display: none;
+    }
+
+    .status-msg.error {
+      display: block;
+      background: #fee;
+      color: #c00;
+    }
+
+    .status-msg.success {
+      display: block;
+      background: #efe;
+      color: #060;
+    }
   </style>
 </head>
 <body>
@@ -467,7 +487,7 @@
     </div>
   </div>
   
-  <div class="section">
+  <div class="section" id="cloudSyncSection" style="display:none;">
     <h2>Cloud Sync</h2>
     <div class="form-group">
       <div class="sync-row">
@@ -492,8 +512,22 @@
     <div class="button-row">
       <button class="btn-secondary" id="exportJsonBtn">📥 Export JSON</button>
       <button class="btn-secondary" id="exportCsvBtn">📥 Export CSV</button>
+      <button class="btn-secondary" id="importJsonBtn">📤 Import JSON</button>
     </div>
-    <p class="hint" style="margin-top: 8px;">Your data syncs automatically across devices via your Google account</p>
+    <input type="file" id="importFileInput" accept="application/json,.json" style="display:none;">
+    <div class="checkbox-group" style="margin-top: 12px;">
+      <input type="checkbox" id="importSettingsToo">
+      <label for="importSettingsToo" style="margin-bottom: 0; font-weight: 400;">
+        Also import settings (reminder interval, hourly rate, working days)
+      </label>
+    </div>
+    <p class="hint" style="margin-top: 8px;">
+      To move data between devices, export JSON on one and import it on the other.
+      Importing merges by item — nothing is deleted, and if the same item exists on
+      both sides the more recently edited version is kept. Import the whole export
+      file rather than a hand-edited subset, so entries keep their groups and projects.
+    </p>
+    <p class="status-msg" id="importMessage"></p>
   </div>
   
   <div class="section danger-zone">

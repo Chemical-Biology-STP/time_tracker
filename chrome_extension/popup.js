@@ -38,17 +38,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ── Cloud sync status bar ──
 
 async function initializeSyncBar() {
-  document.getElementById('syncBar').addEventListener('click', openSettings);
-  await refreshSyncBar();
-  // Keep "Synced Xm ago" text fresh while the popup stays open.
-  setInterval(refreshSyncBar, 30000);
+  const cloudSyncAvailable = FirebaseConfig.isConfigured();
 
-  // Keep the popup's view in sync if data changes underneath it -- e.g. a
-  // background alarm just pulled new entries from another device while
-  // this popup happens to be open.
+  // Only show the sync bar when cloud sync has actually been set up for this
+  // installation. Otherwise it would just advertise a sign-in that can't work.
+  if (cloudSyncAvailable) {
+    document.getElementById('syncBar').style.display = '';
+    document.getElementById('syncBar').addEventListener('click', openSettings);
+    await refreshSyncBar();
+    // Keep "Synced Xm ago" text fresh while the popup stays open.
+    setInterval(refreshSyncBar, 30000);
+  } else {
+    document.getElementById('syncBar').style.display = 'none';
+  }
+
+  // Refresh the visible panel if data changes underneath the popup -- either a
+  // background sync pulling entries from another device, or an import running
+  // in the options page while this popup is open.
   chrome.storage.onChanged.addListener((changes, namespace) => {
     if (namespace !== 'local') return;
-    if (changes.syncStatus) refreshSyncBar();
+    if (cloudSyncAvailable && changes.syncStatus) refreshSyncBar();
     if (changes.groups || changes.projects || changes.entries) {
       reloadAllPanelsFromStorage();
     }

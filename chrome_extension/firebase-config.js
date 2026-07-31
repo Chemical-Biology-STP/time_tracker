@@ -28,6 +28,34 @@ FirebaseConfig.FIRESTORE_BASE_URL =
   `https://firestore.googleapis.com/v1/projects/${FirebaseConfig.FIREBASE_PROJECT_ID}` +
   `/databases/${FirebaseConfig.FIRESTORE_DATABASE_ID}/documents`;
 
+/**
+ * Whether cloud sync has actually been configured for this installation.
+ *
+ * Cloud sync is an advanced, opt-in feature: it needs a Firebase project and
+ * an OAuth client that only whoever deploys this extension can create. Until
+ * all three values are filled in, the sync UI stays hidden and no sync work
+ * runs, so users aren't shown a sign-in button that can only fail.
+ *
+ * To move data between devices without any of this setup, use Export/Import
+ * JSON in Settings instead.
+ */
+FirebaseConfig.isConfigured = function () {
+  const filled = v => typeof v === 'string' && v.length > 0 && !v.startsWith('YOUR_');
+
+  if (!filled(this.FIREBASE_API_KEY) || !filled(this.FIREBASE_PROJECT_ID)) {
+    return false;
+  }
+
+  // The OAuth client ID lives in manifest.json rather than this file, since
+  // chrome.identity reads it from there directly.
+  try {
+    const oauth2 = chrome.runtime.getManifest().oauth2;
+    return !!(oauth2 && filled(oauth2.client_id));
+  } catch (e) {
+    return false;
+  }
+};
+
 // Make available across contexts (popup/options pages use `window`,
 // the background service worker uses `self`/`globalThis`). Classic scripts
 // loaded together already share one global scope, so this is mostly a

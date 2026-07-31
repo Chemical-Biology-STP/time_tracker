@@ -1,6 +1,6 @@
 # Time Tracker - Chrome Extension
 
-A fully standalone Chrome extension for tracking work time. Works entirely offline on a single device out of the box, with optional cross-device sync via Google sign-in and Firestore.
+A fully standalone Chrome extension for tracking work time. No server or account required — everything runs locally in your browser.
 
 ## Features
 
@@ -8,7 +8,7 @@ A fully standalone Chrome extension for tracking work time. Works entirely offli
 - 🔔 Periodic reminder notifications
 - 📊 View entries and summary statistics
 - 📥 Export to CSV for reporting
-- 🔄 Optional cloud sync across devices (sign in with Google)
+- 🔁 Export/Import JSON to move data between devices
 - 👥 Multiple research groups support
 
 ## Installation
@@ -22,11 +22,21 @@ A fully standalone Chrome extension for tracking work time. Works entirely offli
 
 The extension works fully offline on that one device at this point — no further setup needed.
 
-## Cloud Sync (optional)
+## Moving data between devices
 
-To sync your groups, projects, entries, and settings across multiple devices, see [`CLOUD_SYNC_SETUP.md`](./CLOUD_SYNC_SETUP.md). It walks through creating a free Firebase project and connecting it to the extension (about 10-15 minutes, one-time).
+Use **Export JSON** and **Import JSON** in the Settings page:
 
-If you don't set this up, the extension still works normally — data just stays local to that device, the same way it worked in versions prior to 1.7.0.
+1. On the device with your data, open Settings and click **Export JSON**
+2. Copy that file to the other device
+3. Open Settings there and click **Import JSON**
+
+Importing merges by item — nothing is deleted, and if the same item exists on both devices the more recently edited version is kept. That makes it safe to import the same file twice, or to import in both directions. Settings (reminder interval, hourly rate, working days) are only imported if you tick the checkbox.
+
+## Cloud Sync (advanced, optional, off by default)
+
+There's also an optional automatic sync through Firebase Firestore. It's **disabled and hidden** unless configured, because it requires creating your own Firebase project and OAuth client — see [`CLOUD_SYNC_SETUP.md`](./CLOUD_SYNC_SETUP.md) if you want it.
+
+Be aware that this setup has to be repeated by everyone who installs the extension from source, which is why Export/Import above is the recommended approach for most people.
 
 ## Usage
 

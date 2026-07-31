@@ -1,16 +1,30 @@
-# Cloud Sync Setup (Firestore)
+# Cloud Sync Setup (Firestore) — advanced, optional
+
+> **Most people don't need this.** To move data between devices, use
+> **Export JSON** / **Import JSON** in the extension's Settings page. That
+> needs no accounts, no server, and no setup — export on one device, import
+> on the other. Import merges by item and keeps the more recently edited
+> version, so it's safe to do repeatedly.
+>
+> This document covers the optional automatic cloud sync instead. It requires
+> creating your own Firebase project and OAuth client, which is per-deployment
+> work that can't be pre-configured or shipped. **Cloud sync is disabled and
+> hidden in the UI until it's configured**, so you can ignore this entirely.
+>
+> A note on scale: this setup has to be repeated by every person who installs
+> the extension from source. It only becomes a one-time job if the extension
+> is published to the Chrome Web Store with the config baked in.
 
 This extension can sync groups, projects, entries, and settings across
 devices by signing in with your Google account. Data is stored in a
 Firestore database that only you (the signed-in account) can read or
 write, enforced by the security rules in `firestore.rules`.
 
-This sync is optional. If you skip this setup, the extension keeps
-working exactly as before, using only local storage on that one device
-(now `chrome.storage.local`, which has no per-item size ceiling — the
+If you skip this setup, the extension works normally using local storage on
+each device (`chrome.storage.local`, which has no per-item size ceiling — the
 issue that caused "kQuotaBytesPerItem quota exceeded" errors previously).
 
-You only need to do this setup once. It takes about 10-15 minutes.
+Setup takes about 10-15 minutes.
 
 ## 1. Create a Firebase project
 

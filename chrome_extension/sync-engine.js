@@ -73,6 +73,10 @@ const SyncEngine = {
   // ---- Core sync cycle -----------------------------------------------------
 
   async _runSync() {
+    if (!FirebaseConfig.isConfigured()) {
+      return { skipped: true, reason: 'not-configured' };
+    }
+
     const isSignedIn = await CloudAuth.isSignedIn();
     if (!isSignedIn) return { skipped: true, reason: 'not-signed-in' };
 

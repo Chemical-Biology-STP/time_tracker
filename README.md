@@ -6,7 +6,7 @@ A time tracking application for logging work hours with periodic reminders.
 
 ### Chrome Extension (Recommended for Windows/Linux)
 
-A standalone Chrome extension that works on any OS. No server required — works fully offline on one device, with optional cross-device sync via Google sign-in.
+A standalone Chrome extension that works on any OS. No server or account required — everything runs locally in your browser.
 
 **Installation:**
 1. Download `TimeTrackerExtension.zip` from [Releases](https://github.com/Chemical-Biology-STP/time_tracker/releases)
@@ -21,7 +21,7 @@ A standalone Chrome extension that works on any OS. No server required — works
 - Periodic reminder notifications
 - Filter entries by group, year, and month
 - Export to CSV with totals
-- Optional cloud sync across devices — see [`chrome_extension/CLOUD_SYNC_SETUP.md`](chrome_extension/CLOUD_SYNC_SETUP.md)
+- Export/Import JSON to move data between devices
 
 ### macOS Companion App
 

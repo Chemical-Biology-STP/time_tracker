@@ -20,6 +20,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('exportJsonBtn').addEventListener('click', exportJSON);
   document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
   document.getElementById('clearDataBtn').addEventListener('click', clearAllData);
+
+  // Import
+  document.getElementById('importJsonBtn').addEventListener('click', () => {
+    document.getElementById('importFileInput').click();
+  });
+  document.getElementById('importFileInput').addEventListener('change', handleImportFile);
   
   // Project event listeners
   document.getElementById('projectGroupFilter').addEventListener('change', loadProjects);
@@ -34,6 +40,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ── Cloud Sync ──
 
 async function initializeCloudSync() {
+  // Cloud sync needs a Firebase project + OAuth client that only whoever
+  // deploys this extension can set up. If that hasn't been done, keep the
+  // whole section hidden rather than offering a sign-in button that can only
+  // fail -- Export/Import JSON is the supported way to move data between
+  // devices. See CLOUD_SYNC_SETUP.md to enable this.
+  if (!FirebaseConfig.isConfigured()) {
+    document.getElementById('cloudSyncSection').style.display = 'none';
+    return;
+  }
+  document.getElementById('cloudSyncSection').style.display = '';
+
   document.getElementById('signInBtn').addEventListener('click', handleSignIn);
   document.getElementById('signOutBtn').addEventListener('click', handleSignOut);
   document.getElementById('syncNowBtn').addEventListener('click', handleSyncNow);
@@ -325,6 +342,77 @@ async function exportCSV() {
   a.click();
   
   URL.revokeObjectURL(url);
+}
+
+// ── Import ──
+
+async function handleImportFile(event) {
+  const input = event.target;
+  const file = input.files && input.files[0];
+  if (!file) return;
+
+  // Reset the input so re-picking the same file still fires a change event.
+  input.value = '';
+
+  let payload;
+  try {
+    payload = JSON.parse(await file.text());
+  } catch (err) {
+    showImportMessage('Could not read that file. Is it a Time Tracker JSON export?', 'error');
+    return;
+  }
+
+  const looksValid = payload && typeof payload === 'object' && (
+    Array.isArray(payload.groups) ||
+    Array.isArray(payload.projects) ||
+    Array.isArray(payload.entries)
+  );
+  if (!looksValid) {
+    showImportMessage('That file does not look like a Time Tracker export.', 'error');
+    return;
+  }
+
+  const includeSettings = document.getElementById('importSettingsToo').checked;
+
+  const btn = document.getElementById('importJsonBtn');
+  btn.disabled = true;
+  btn.textContent = 'Importing…';
+
+  try {
+    const summary = await Storage.importData(payload, { includeSettings });
+
+    const parts = [];
+    for (const name of ['groups', 'projects', 'entries']) {
+      const { added, updated } = summary[name];
+      if (added || updated) {
+        const bits = [];
+        if (added) bits.push(`${added} added`);
+        if (updated) bits.push(`${updated} updated`);
+        parts.push(`${name}: ${bits.join(', ')}`);
+      }
+    }
+    if (summary.settingsImported) parts.push('settings imported');
+
+    const message = parts.length
+      ? `Import complete — ${parts.join('; ')}.`
+      : 'Import complete — everything in that file was already up to date.';
+    showImportMessage(message, 'success');
+
+    await loadGroups();
+    await loadProjects();
+    await loadSettings();
+  } catch (err) {
+    showImportMessage('Import failed: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📤 Import JSON';
+  }
+}
+
+function showImportMessage(text, type) {
+  const el = document.getElementById('importMessage');
+  el.textContent = text;
+  el.className = 'status-msg ' + type;
 }
 
 async function clearAllData() {
